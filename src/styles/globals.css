@@ -251,6 +251,11 @@ body {
   border: 1px solid var(--glass-border);
 }
 
+/* ─── Scrollbar Hide (for score ticker) ─── */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* ─── Score Bug Glass ─── */
 .scorebug-glass {
   background: rgba(10, 14, 26, 0.92);

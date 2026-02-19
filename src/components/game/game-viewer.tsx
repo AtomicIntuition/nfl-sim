@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import type { NarrativeSnapshot } from '@/lib/simulation/types';
 import { useGameStream } from '@/hooks/use-game-stream';
 import { useMomentum } from '@/hooks/use-momentum';
@@ -94,20 +95,23 @@ export function GameViewer({ gameId }: GameViewerProps) {
 
   if (status === 'intermission') {
     return (
-      <div className="min-h-dvh flex flex-col items-center justify-center px-4">
-        <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center space-y-4">
-          <Badge variant="default" size="md">
-            INTERMISSION
-          </Badge>
-          {intermissionMessage && (
-            <p className="text-sm text-text-secondary">{intermissionMessage}</p>
-          )}
-          {intermissionCountdown > 0 && (
-            <div className="font-mono text-3xl font-black text-gold tabular-nums">
-              {Math.floor(intermissionCountdown / 60)}:
-              {(intermissionCountdown % 60).toString().padStart(2, '0')}
-            </div>
-          )}
+      <div className="min-h-dvh flex flex-col">
+        <GameNav />
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center space-y-4">
+            <Badge variant="default" size="md">
+              INTERMISSION
+            </Badge>
+            {intermissionMessage && (
+              <p className="text-sm text-text-secondary">{intermissionMessage}</p>
+            )}
+            {intermissionCountdown > 0 && (
+              <div className="font-mono text-3xl font-black text-gold tabular-nums">
+                {Math.floor(intermissionCountdown / 60)}:
+                {(intermissionCountdown % 60).toString().padStart(2, '0')}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -144,6 +148,9 @@ export function GameViewer({ gameId }: GameViewerProps) {
     <div className={`flex flex-col min-h-dvh ${celebrationClass}`}>
       {/* ── Mobile Layout ── */}
       <div className="flex flex-col h-dvh lg:hidden">
+        {/* Navigation bar */}
+        <GameNav />
+
         {/* Scoreboard at top */}
         <ScoreBug
           gameState={gameState}
@@ -199,7 +206,10 @@ export function GameViewer({ gameId }: GameViewerProps) {
 
       {/* ── Desktop Layout ── */}
       <div className="hidden lg:flex lg:flex-col lg:h-dvh">
-        {/* Scoreboard at top (replaces old header) */}
+        {/* Navigation bar */}
+        <GameNav />
+
+        {/* Scoreboard at top */}
         <ScoreBug
           gameState={gameState}
           status={status === 'game_over' ? 'game_over' : 'live'}
@@ -270,6 +280,30 @@ export function GameViewer({ gameId }: GameViewerProps) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Game Navigation Bar ──────────────────────────────────────
+
+function GameNav() {
+  return (
+    <div className="flex items-center justify-between px-4 py-2 scorebug-glass border-b border-white/[0.06] flex-shrink-0">
+      <Link
+        href="/"
+        className="text-xs font-bold text-text-secondary hover:text-text-primary transition-colors"
+      >
+        {'\u2190'} Home
+      </Link>
+      <span className="text-[10px] font-bold text-text-muted tracking-wider uppercase">
+        Live Broadcast
+      </span>
+      <Link
+        href="/schedule"
+        className="text-xs font-bold text-text-secondary hover:text-text-primary transition-colors"
+      >
+        Schedule
+      </Link>
     </div>
   );
 }

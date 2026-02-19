@@ -17,6 +17,7 @@ import { ROUTES } from '@/lib/utils/constants';
 import { LiveScore } from '@/components/game/live-score';
 import { IntermissionCountdown } from '@/components/game/intermission-countdown';
 import { TeamLogo } from '@/components/team/team-logo';
+import { ScoreTicker } from '@/components/game/score-ticker';
 
 // ============================================================
 // Data fetching
@@ -104,10 +105,10 @@ async function getHomePageData() {
   ).length;
   const totalCount = weekGames.length;
 
-  // Intermission detection: 15-min window after the most recent featured game completes
+  // Intermission detection: 15-min window after the most recent game completes
   const INTERMISSION_MS = 15 * 60 * 1000;
-  const recentFeatured = weekGames
-    .filter((g) => g.isFeatured && g.status === 'completed' && g.completedAt)
+  const recentCompleted = weekGames
+    .filter((g) => g.status === 'completed' && g.completedAt)
     .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0];
 
   let intermission: {
@@ -116,10 +117,10 @@ async function getHomePageData() {
     nextGame: Awaited<ReturnType<typeof hydrateGame>>;
   } | null = null;
 
-  if (recentFeatured?.completedAt && !liveGame) {
-    const elapsed = Date.now() - recentFeatured.completedAt.getTime();
+  if (recentCompleted?.completedAt && !liveGame) {
+    const elapsed = Date.now() - recentCompleted.completedAt.getTime();
     if (elapsed < INTERMISSION_MS) {
-      const hydratedCompleted = await hydrateGame(recentFeatured);
+      const hydratedCompleted = await hydrateGame(recentCompleted);
 
       // Look for next scheduled game in current week first
       let upcomingGame = weekGames.find((g) => g.status === 'scheduled');
@@ -144,7 +145,7 @@ async function getHomePageData() {
         intermission = {
           completedGame: hydratedCompleted,
           endsAt: new Date(
-            recentFeatured.completedAt.getTime() + INTERMISSION_MS
+            recentCompleted.completedAt.getTime() + INTERMISSION_MS
           ).toISOString(),
           nextGame: hydratedUpcoming,
         };
@@ -311,71 +312,29 @@ export default async function HomePage() {
 
         {/* ---- Score Ticker ---- */}
         {completedGames.length > 0 && (
-          <section className="border-y border-border bg-surface/50">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-bold text-text-muted tracking-wider uppercase">
-                  Scores
-                </span>
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
-                {completedGames.map(
-                  (game) =>
-                    game && (
-                      <Link
-                        key={game.id}
-                        href={ROUTES.GAME(game.id)}
-                        className="flex-shrink-0"
-                      >
-                        <Card
-                          variant="bordered"
-                          padding="sm"
-                          className="min-w-[160px] hover:border-gold/30 transition-colors"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <TeamLogo
-                                  abbreviation={game.awayTeam?.abbreviation ?? '???'}
-                                  teamName={game.awayTeam?.name ?? undefined}
-                                  size={16}
-                                  className="w-4 h-4 object-contain shrink-0"
-                                />
-                                <span className="text-xs font-bold">
-                                  {game.awayTeam?.abbreviation ?? '???'}
-                                </span>
-                              </div>
-                              <span className="font-mono text-sm font-black tabular-nums">
-                                {game.awayScore ?? 0}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <TeamLogo
-                                  abbreviation={game.homeTeam?.abbreviation ?? '???'}
-                                  teamName={game.homeTeam?.name ?? undefined}
-                                  size={16}
-                                  className="w-4 h-4 object-contain shrink-0"
-                                />
-                                <span className="text-xs font-bold">
-                                  {game.homeTeam?.abbreviation ?? '???'}
-                                </span>
-                              </div>
-                              <span className="font-mono text-sm font-black tabular-nums">
-                                {game.homeScore ?? 0}
-                              </span>
-                            </div>
-                          </div>
-                          <Badge variant="final" size="sm" className="mt-1.5">
-                            Final
-                          </Badge>
-                        </Card>
-                      </Link>
-                    )
-                )}
-              </div>
-            </div>
-          </section>
+          <ScoreTicker
+            games={completedGames
+              .filter(Boolean)
+              .map((g) => ({
+                id: g!.id,
+                homeTeam: g!.homeTeam
+                  ? {
+                      abbreviation: g!.homeTeam.abbreviation,
+                      name: g!.homeTeam.name,
+                      primaryColor: g!.homeTeam.primaryColor,
+                    }
+                  : null,
+                awayTeam: g!.awayTeam
+                  ? {
+                      abbreviation: g!.awayTeam.abbreviation,
+                      name: g!.awayTeam.name,
+                      primaryColor: g!.awayTeam.primaryColor,
+                    }
+                  : null,
+                homeScore: g!.homeScore ?? 0,
+                awayScore: g!.awayScore ?? 0,
+              }))}
+          />
         )}
 
         {/* ---- Quick Standings ---- */}

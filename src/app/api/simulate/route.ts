@@ -222,27 +222,19 @@ async function determineNextAction(): Promise<SimAction> {
     }
   }
 
-  // ---- Intermission: 15 min pause after a featured broadcast finishes ----
-  const INTERMISSION_MS = 15 * 60 * 1000;
+  // ---- Intermission: pause after a broadcast finishes before next game ----
+  const INTERMISSION_MS = 15 * 60 * 1000; // 15 minutes between games
 
-  const lastFeaturedCompleted = weekGames
-    .filter((g) => g.status === 'completed' && g.completedAt && g.isFeatured)
+  const lastCompleted = weekGames
+    .filter((g) => g.status === 'completed' && g.completedAt)
     .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0];
 
-  if (lastFeaturedCompleted?.completedAt) {
-    const elapsed = Date.now() - lastFeaturedCompleted.completedAt.getTime();
+  // Only pause between games if there are still more games to play
+  const scheduledGames = weekGames.filter((g) => g.status === 'scheduled');
+
+  if (lastCompleted?.completedAt && scheduledGames.length > 0) {
+    const elapsed = Date.now() - lastCompleted.completedAt.getTime();
     if (elapsed < INTERMISSION_MS) {
-      // During intermission: complete background games but don't start next featured
-      const hasScheduledBgGames = weekGames.some(
-        (g) => !g.isFeatured && g.status === 'scheduled'
-      );
-      if (hasScheduledBgGames) {
-        return {
-          type: 'complete_week',
-          seasonId: season.id,
-          week: season.currentWeek,
-        };
-      }
       return {
         type: 'idle',
         message: `Intermission — next game in ${Math.ceil((INTERMISSION_MS - elapsed) / 60000)} min`,
@@ -250,7 +242,7 @@ async function determineNextAction(): Promise<SimAction> {
     }
   }
 
-  // Check if the featured game for this week needs to be played
+  // Check if there's a game already marked as featured and scheduled
   const featuredGame = weekGames.find(
     (g) => g.isFeatured && g.status === 'scheduled'
   );
@@ -263,25 +255,8 @@ async function determineNextAction(): Promise<SimAction> {
     };
   }
 
-  // Check if there are any scheduled game to pick as featured
-  const scheduledGames = weekGames.filter((g) => g.status === 'scheduled');
-
+  // Pick the next game to play from remaining scheduled games
   if (scheduledGames.length > 0) {
-    // No featured game set -- check if featured game was already completed
-    const featuredCompleted = weekGames.find(
-      (g) => g.isFeatured && g.status === 'completed'
-    );
-
-    if (featuredCompleted) {
-      // Featured game done, simulate remaining games as background
-      return {
-        type: 'complete_week',
-        seasonId: season.id,
-        week: season.currentWeek,
-      };
-    }
-
-    // No featured game at all — pick the most appealing game to feature
     const bestGameId = await pickBestFeaturedGame(
       scheduledGames, season.id, season.currentWeek
     );
@@ -309,7 +284,7 @@ async function determineNextAction(): Promise<SimAction> {
       return { type: 'season_complete', seasonId: season.id };
     }
 
-    // ---- Inter-week intermission: 30 min pause before advancing ----
+    // ---- Inter-week break: 30 min pause before advancing to next week ----
     const WEEK_INTERMISSION_MS = 30 * 60 * 1000;
     const lastCompletedGame = weekGames
       .filter((g) => g.completedAt)
@@ -636,34 +611,66 @@ async function handleCompleteWeek(seasonId: string, week: number) {
 
     if (!homeTeam || !awayTeam) continue;
 
-    // Generate a quick score result (no events needed for non-featured games)
-    const homeRating =
-      (homeTeam.offenseRating + homeTeam.defenseRating) / 2;
-    const awayRating =
-      (awayTeam.offenseRating + awayTeam.defenseRating) / 2;
-    const homeAdv = 3; // Home field advantage
+    // Fetch player rosters for both teams
+    const [homePlayerRows, awayPlayerRows] = await Promise.all([
+      db.select().from(players).where(eq(players.teamId, homeTeam.id)),
+      db.select().from(players).where(eq(players.teamId, awayTeam.id)),
+    ]);
 
-    const ratingDiff = homeRating - awayRating + homeAdv;
-    const baseScore = 21;
-    const variance = 14;
+    // Run full simulation engine (same as featured games, just not broadcast)
+    const simHomeTeam = mapDbTeamToSim(homeTeam);
+    const simAwayTeam = mapDbTeamToSim(awayTeam);
+    const simHomePlayers = homePlayerRows.map(mapDbPlayerToSim);
+    const simAwayPlayers = awayPlayerRows.map(mapDbPlayerToSim);
 
-    const homeScore = Math.max(
-      0,
-      Math.round(baseScore + ratingDiff * 0.3 + (Math.random() - 0.5) * variance)
-    );
-    const awayScore = Math.max(
-      0,
-      Math.round(baseScore - ratingDiff * 0.3 + (Math.random() - 0.5) * variance)
-    );
+    const simResult = simulateGame({
+      homeTeam: simHomeTeam,
+      awayTeam: simAwayTeam,
+      homePlayers: simHomePlayers,
+      awayPlayers: simAwayPlayers,
+      gameType: game.gameType as GameType,
+    });
 
-    // Update game as completed
+    // Store all events so users can review the full game
+    const dbEvents = simResult.events.map((event, idx) => ({
+      gameId: game.id,
+      eventNumber: idx + 1,
+      eventType: event.playResult.type,
+      playResult: event.playResult as unknown as Record<string, unknown>,
+      commentary: event.commentary as unknown as Record<string, unknown>,
+      gameState: event.gameState as unknown as Record<string, unknown>,
+      narrativeContext: event.narrativeContext as unknown as Record<string, unknown>,
+      displayTimestamp: event.timestamp,
+    }));
+
+    if (dbEvents.length > 0) {
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < dbEvents.length; i += BATCH_SIZE) {
+        const batch = dbEvents.slice(i, i + BATCH_SIZE);
+        await db.insert(gameEvents).values(batch);
+      }
+    }
+
+    const boxScoreWithMvp = {
+      ...simResult.boxScore as unknown as Record<string, unknown>,
+      mvp: simResult.mvp,
+    };
+
+    // Mark completed immediately (no broadcast for non-featured games)
     await db
       .update(games)
       .set({
         status: 'completed',
-        homeScore,
-        awayScore,
+        homeScore: simResult.finalScore.home,
+        awayScore: simResult.finalScore.away,
+        boxScore: boxScoreWithMvp,
+        totalPlays: simResult.totalPlays,
         completedAt: new Date(),
+        serverSeedHash: simResult.serverSeedHash,
+        serverSeed: simResult.serverSeed,
+        clientSeed: simResult.clientSeed,
+        nonce: simResult.nonce,
+        mvpPlayerId: simResult.mvp?.player?.id ?? null,
       })
       .where(eq(games.id, game.id));
 
@@ -672,8 +679,8 @@ async function handleCompleteWeek(seasonId: string, week: number) {
       seasonId,
       homeTeam,
       awayTeam,
-      homeScore,
-      awayScore
+      simResult.finalScore.home,
+      simResult.finalScore.away
     );
 
     gamesCompleted++;
