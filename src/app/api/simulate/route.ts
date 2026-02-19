@@ -302,13 +302,28 @@ async function determineNextAction(): Promise<SimAction> {
 
   if (allCompleted && weekGames.length > 0) {
     // Check if this is the last week of the season phase
-    const isRegularSeasonEnd =
-      season.status === 'regular_season' && season.currentWeek >= 18;
     const isPlayoffEnd =
       season.status === 'super_bowl' && allCompleted;
 
     if (isPlayoffEnd) {
       return { type: 'season_complete', seasonId: season.id };
+    }
+
+    // ---- Inter-week intermission: 30 min pause before advancing ----
+    const WEEK_INTERMISSION_MS = 30 * 60 * 1000;
+    const lastCompletedGame = weekGames
+      .filter((g) => g.completedAt)
+      .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0];
+
+    if (lastCompletedGame?.completedAt) {
+      const elapsed = Date.now() - lastCompletedGame.completedAt.getTime();
+      if (elapsed < WEEK_INTERMISSION_MS) {
+        const minsLeft = Math.ceil((WEEK_INTERMISSION_MS - elapsed) / 60000);
+        return {
+          type: 'idle',
+          message: `Week ${season.currentWeek} complete — next week in ${minsLeft} min`,
+        };
+      }
     }
 
     return { type: 'advance_week', seasonId: season.id };

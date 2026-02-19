@@ -152,6 +152,49 @@ async function getHomePageData() {
     }
   }
 
+  // Inter-week break detection: all games done, waiting 30 min before next week
+  const WEEK_BREAK_MS = 30 * 60 * 1000;
+  const allWeekCompleted =
+    weekGames.length > 0 && weekGames.every((g) => g.status === 'completed');
+
+  let weekBreak: {
+    endsAt: string;
+    nextWeekGames: NonNullable<Awaited<ReturnType<typeof hydrateGame>>>[];
+    currentWeek: number;
+  } | null = null;
+
+  if (allWeekCompleted && !liveGame && !intermission) {
+    const lastGame = weekGames
+      .filter((g) => g.completedAt)
+      .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0];
+
+    if (lastGame?.completedAt) {
+      const elapsed = Date.now() - lastGame.completedAt.getTime();
+      if (elapsed < WEEK_BREAK_MS) {
+        // Fetch next week's games for preview
+        const nextWeek = season.currentWeek + 1;
+        const nextGames = await db
+          .select()
+          .from(games)
+          .where(
+            and(eq(games.seasonId, season.id), eq(games.week, nextWeek))
+          );
+
+        const hydratedNextGames = (
+          await Promise.all(nextGames.slice(0, 6).map(hydrateGame))
+        ).filter(Boolean) as NonNullable<Awaited<ReturnType<typeof hydrateGame>>>[];
+
+        weekBreak = {
+          endsAt: new Date(
+            lastGame.completedAt.getTime() + WEEK_BREAK_MS
+          ).toISOString(),
+          nextWeekGames: hydratedNextGames,
+          currentWeek: season.currentWeek,
+        };
+      }
+    }
+  }
+
   return {
     season,
     liveGame: hydratedLive,
@@ -161,6 +204,7 @@ async function getHomePageData() {
     weekProgress: { completed: completedCount, total: totalCount },
     isLive: !!liveGame,
     intermission,
+    weekBreak,
   };
 }
 
@@ -202,7 +246,7 @@ export default async function HomePage() {
 
   const {
     season, liveGame, nextGame, completedGames, standings,
-    weekProgress, isLive, intermission,
+    weekProgress, isLive, intermission, weekBreak,
   } = data;
 
   return (
@@ -251,6 +295,11 @@ export default async function HomePage() {
                 completedGame={intermission.completedGame}
                 endsAt={intermission.endsAt}
                 nextGame={intermission.nextGame}
+              />
+            ) : weekBreak ? (
+              <WeekBreakHero
+                weekBreak={weekBreak}
+                season={season}
               />
             ) : nextGame ? (
               <NextGameHero game={nextGame} />
@@ -782,6 +831,82 @@ function NextGameHero({ game }: { game: GameCardData }) {
   );
 }
 
+function WeekBreakHero({
+  weekBreak,
+  season,
+}: {
+  weekBreak: {
+    endsAt: string;
+    nextWeekGames: GameCardData[];
+    currentWeek: number;
+  };
+  season: { currentWeek: number; seasonNumber: number; status: string };
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Countdown card */}
+      <Card variant="elevated" padding="lg" className="text-center border-gold/20">
+        <Badge variant="gold" size="md" className="mb-4">
+          WEEK {weekBreak.currentWeek} COMPLETE
+        </Badge>
+        <p className="text-text-secondary text-sm mb-4">
+          All games this week have wrapped up. Next week kicks off soon.
+        </p>
+        <IntermissionCountdown endsAt={weekBreak.endsAt} />
+        <div className="mt-4">
+          <Link
+            href={ROUTES.SCHEDULE}
+            className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors border border-border rounded-full"
+          >
+            View Results &amp; Standings &rarr;
+          </Link>
+        </div>
+      </Card>
+
+      {/* Next week preview */}
+      {weekBreak.nextWeekGames.length > 0 && (
+        <Card variant="glass" padding="lg">
+          <p className="text-xs text-text-muted tracking-wider uppercase font-bold mb-4 text-center">
+            Week {weekBreak.currentWeek + 1} Preview
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {weekBreak.nextWeekGames.map((g) => (
+              <div
+                key={g.id}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-surface/40 border border-border/30"
+              >
+                <div className="flex items-center gap-2">
+                  <TeamLogo
+                    abbreviation={g.awayTeam?.abbreviation ?? '???'}
+                    teamName={g.awayTeam?.name ?? undefined}
+                    size={24}
+                    className="w-6 h-6 object-contain shrink-0"
+                  />
+                  <span className="text-xs font-bold">
+                    {g.awayTeam?.abbreviation ?? '???'}
+                  </span>
+                </div>
+                <span className="text-[10px] text-text-muted font-medium">@</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold">
+                    {g.homeTeam?.abbreviation ?? '???'}
+                  </span>
+                  <TeamLogo
+                    abbreviation={g.homeTeam?.abbreviation ?? '???'}
+                    teamName={g.homeTeam?.name ?? undefined}
+                    size={24}
+                    className="w-6 h-6 object-contain shrink-0"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function WeekCompleteHero({
   season,
 }: {
@@ -796,8 +921,7 @@ function WeekCompleteHero({
         All games have been played
       </h2>
       <p className="text-text-secondary max-w-md mx-auto mb-6">
-        Check the schedule for results and standings updates. The next week of
-        action is coming soon.
+        The next week of action is coming soon.
       </p>
       <Link
         href={ROUTES.SCHEDULE}
