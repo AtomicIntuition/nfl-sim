@@ -16,33 +16,44 @@ interface PlayFeedProps {
 
 export function PlayFeed({ events, isLive }: PlayFeedProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const lastEventCount = useRef(0);
+  const [isAtTop, setIsAtTop] = useState(true);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const lastSeenCount = useRef(0);
 
-  // Auto-scroll to bottom when new events arrive
-  useEffect(() => {
-    if (autoScroll && events.length > lastEventCount.current && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: events.length - lastEventCount.current > 3 ? 'auto' : 'smooth' });
-    }
-    lastEventCount.current = events.length;
-  }, [events.length, autoScroll]);
-
-  // Detect manual scroll to disable auto-scroll
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-    setAutoScroll(isNearBottom);
-  }, []);
-
-  // Filter out kickoffs/touchbacks for a cleaner feed, but keep scoring plays
+  // Filter out touchbacks for cleaner feed, keep scoring plays
   const displayEvents = events.filter(
     (e) =>
       e.playResult.type !== 'touchback' ||
       e.playResult.isTouchdown ||
       e.playResult.scoring
   );
+
+  // Reverse chronological — newest play at top
+  const reversedEvents = [...displayEvents].reverse();
+
+  // Track unseen plays when user has scrolled down
+  useEffect(() => {
+    if (!isAtTop && displayEvents.length > lastSeenCount.current) {
+      setUnseenCount(displayEvents.length - lastSeenCount.current);
+    }
+    if (isAtTop) {
+      lastSeenCount.current = displayEvents.length;
+      setUnseenCount(0);
+    }
+  }, [displayEvents.length, isAtTop]);
+
+  // Detect scroll position
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const nearTop = scrollRef.current.scrollTop < 80;
+    setIsAtTop(nearTop);
+  }, []);
+
+  const scrollToTop = () => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    setUnseenCount(0);
+    lastSeenCount.current = displayEvents.length;
+  };
 
   return (
     <div className="relative flex flex-col h-full">
@@ -57,27 +68,23 @@ export function PlayFeed({ events, isLive }: PlayFeedProps) {
           </div>
         )}
 
-        {displayEvents.map((event, idx) => (
+        {reversedEvents.map((event, idx) => (
           <PlayCard
             key={event.eventNumber}
             event={event}
-            isNew={isLive && idx === displayEvents.length - 1}
+            isNew={isLive && idx === 0}
+            isFeatured={idx === 0}
           />
         ))}
-
-        <div ref={bottomRef} />
       </div>
 
-      {/* Scroll-to-bottom indicator */}
-      {!autoScroll && isLive && (
+      {/* Scroll-to-top pill when new plays arrive while scrolled down */}
+      {!isAtTop && unseenCount > 0 && isLive && (
         <button
-          onClick={() => {
-            bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-            setAutoScroll(true);
-          }}
-          className="absolute bottom-3 right-3 bg-surface-elevated/90 backdrop-blur-sm border border-border rounded-full px-3 py-1.5 text-[11px] font-semibold text-gold shadow-lg hover:bg-surface-hover transition-colors"
+          onClick={scrollToTop}
+          className="absolute top-3 left-1/2 -translate-x-1/2 bg-gold/90 backdrop-blur-sm rounded-full px-4 py-1.5 text-[11px] font-bold text-surface shadow-lg hover:bg-gold transition-colors z-10 animate-bounce-subtle"
         >
-          {'\u2193'} New plays
+          {'\u2191'} {unseenCount} new play{unseenCount !== 1 ? 's' : ''}
         </button>
       )}
     </div>
@@ -89,10 +96,11 @@ export function PlayFeed({ events, isLive }: PlayFeedProps) {
 interface PlayCardProps {
   event: GameEvent;
   isNew: boolean;
+  isFeatured?: boolean;
 }
 
-function PlayCard({ event, isNew }: PlayCardProps) {
-  const { playResult, commentary, gameState, narrativeContext } = event;
+function PlayCard({ event, isNew, isFeatured = false }: PlayCardProps) {
+  const { playResult, commentary, gameState } = event;
   const [showFullCommentary, setShowFullCommentary] = useState(false);
 
   // Determine border color based on play result
@@ -119,22 +127,25 @@ function PlayCard({ event, isNew }: PlayCardProps) {
   return (
     <div
       className={`
-        relative rounded-lg bg-surface/60 border border-border/50
-        transition-all duration-300
+        relative rounded-lg border transition-all duration-300
+        ${isFeatured
+          ? 'bg-surface/80 border-border shadow-lg shadow-black/20 ring-1 ring-white/[0.06]'
+          : 'bg-surface/40 border-border/30 opacity-75 hover:opacity-100'
+        }
         ${isNew ? 'play-enter' : ''}
       `}
-      style={{ borderLeftWidth: '3px', borderLeftColor: borderColor }}
+      style={{ borderLeftWidth: isFeatured ? '4px' : '3px', borderLeftColor: borderColor }}
     >
-      <div className="p-3">
+      <div className={isFeatured ? 'p-3.5' : 'p-2.5'}>
         {/* Header: situation + yards */}
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span className="text-[10px] font-mono text-text-muted tabular-nums flex-shrink-0">
+            <span className={`font-mono text-text-muted tabular-nums flex-shrink-0 ${isFeatured ? 'text-[11px]' : 'text-[10px]'}`}>
               {clockText}
             </span>
             {badge && (
               <span
-                className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded flex-shrink-0"
+                className={`font-black tracking-widest uppercase px-1.5 py-0.5 rounded flex-shrink-0 ${isFeatured ? 'text-[10px]' : 'text-[9px]'}`}
                 style={{
                   backgroundColor: `${borderColor}20`,
                   color: borderColor,
@@ -150,9 +161,9 @@ function PlayCard({ event, isNew }: PlayCardProps) {
             playResult.type !== 'extra_point' &&
             playResult.type !== 'field_goal' && (
               <span
-                className={`text-xs font-mono font-bold tabular-nums flex-shrink-0 ${
+                className={`font-mono font-bold tabular-nums flex-shrink-0 ${
                   playResult.yardsGained > 0 ? 'text-success' : 'text-danger'
-                }`}
+                } ${isFeatured ? 'text-sm' : 'text-xs'}`}
               >
                 {formatYards(playResult.yardsGained)}
               </span>
@@ -160,7 +171,7 @@ function PlayCard({ event, isNew }: PlayCardProps) {
         </div>
 
         {/* Play-by-play commentary */}
-        <p className="text-sm font-semibold text-text-primary leading-snug mb-1">
+        <p className={`font-semibold text-text-primary leading-snug mb-1 ${isFeatured ? 'text-[15px]' : 'text-sm'}`}>
           {isNew ? (
             <TypewriterText text={commentary.playByPlay} speed={18} />
           ) : (
@@ -171,9 +182,9 @@ function PlayCard({ event, isNew }: PlayCardProps) {
         {/* Color analysis */}
         {commentary.colorAnalysis && (
           <p
-            className={`text-[13px] italic text-text-secondary leading-snug ${
-              !showFullCommentary && !isNew ? 'line-clamp-2' : ''
-            }`}
+            className={`italic text-text-secondary leading-snug ${
+              isFeatured ? 'text-[13px]' : 'text-xs'
+            } ${!showFullCommentary && !isNew && !isFeatured ? 'line-clamp-1' : !showFullCommentary && !isNew ? 'line-clamp-2' : ''}`}
             onClick={() => setShowFullCommentary((prev) => !prev)}
           >
             {isNew ? (
@@ -189,7 +200,7 @@ function PlayCard({ event, isNew }: PlayCardProps) {
         )}
 
         {/* Play details footer */}
-        <div className="flex items-center gap-2 mt-2 text-[10px] text-text-muted">
+        <div className={`flex items-center gap-2 mt-2 text-text-muted ${isFeatured ? 'text-[11px]' : 'text-[10px]'}`}>
           {playResult.type !== 'kickoff' &&
             playResult.type !== 'punt' &&
             playResult.type !== 'extra_point' && (
