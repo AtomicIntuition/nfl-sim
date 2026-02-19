@@ -1,0 +1,361 @@
+@import "tailwindcss";
+
+/*
+ * GridIron Live — Premium NFL Simulation
+ * Dark broadcast theme with team color accents
+ */
+
+@theme {
+  /* ─── Core Brand Colors ─── */
+  --color-midnight: #0a0e1a;
+  --color-broadcast: #111827;
+  --color-surface: #1a1f2e;
+  --color-surface-elevated: #232838;
+  --color-surface-hover: #2a3044;
+  --color-border: #2d3548;
+  --color-border-bright: #3d4558;
+
+  /* ─── Accent Colors ─── */
+  --color-gold: #d4af37;
+  --color-gold-bright: #ffd700;
+  --color-gold-dim: #8b7a2e;
+  --color-live-red: #ef4444;
+  --color-live-pulse: #dc2626;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+
+  /* ─── Text Colors ─── */
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-text-accent: #d4af37;
+
+  /* ─── Scoring Colors ─── */
+  --color-touchdown: #fbbf24;
+  --color-turnover: #ef4444;
+  --color-big-play: #22c55e;
+  --color-penalty-flag: #eab308;
+  --color-first-down: #60a5fa;
+
+  /* ─── Typography ─── */
+  --font-display: "Geist", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  /* ─── Spacing & Sizing ─── */
+  --scorebug-height: 72px;
+  --mobile-nav-height: 56px;
+  --ticker-height: 36px;
+
+  /* ─── Animation Timings ─── */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-dramatic: 800ms;
+
+  /* ─── Glassmorphism ─── */
+  --glass-bg: rgba(17, 24, 39, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 20px;
+}
+
+/* ─── Base Styles ─── */
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-midnight);
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar Styling ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-midnight);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-bright);
+}
+
+/* ─── Live Pulse Animation ─── */
+@keyframes live-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+.live-indicator {
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+/* ─── Score Pop Animation ─── */
+@keyframes score-pop {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.35);
+    color: var(--color-gold-bright);
+  }
+  60% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.score-update {
+  animation: score-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ─── Play Slide In ─── */
+@keyframes slide-up-fade {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.play-enter {
+  animation: slide-up-fade 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Typewriter Effect ─── */
+@keyframes typewriter-cursor {
+  0%, 100% {
+    border-color: var(--color-text-primary);
+  }
+  50% {
+    border-color: transparent;
+  }
+}
+
+.typewriter-cursor {
+  border-right: 2px solid;
+  animation: typewriter-cursor 0.8s step-end infinite;
+}
+
+/* ─── Momentum Bar Glow ─── */
+@keyframes momentum-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px currentColor;
+  }
+  50% {
+    box-shadow: 0 0 20px currentColor, 0 0 40px currentColor;
+  }
+}
+
+.momentum-extreme {
+  animation: momentum-pulse 1s ease-in-out infinite;
+}
+
+/* ─── Touchdown Celebration ─── */
+@keyframes touchdown-flash {
+  0% {
+    background-color: transparent;
+  }
+  15% {
+    background-color: rgba(251, 191, 36, 0.15);
+  }
+  30% {
+    background-color: transparent;
+  }
+  45% {
+    background-color: rgba(251, 191, 36, 0.1);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.touchdown-celebration {
+  animation: touchdown-flash 1.2s ease-out;
+}
+
+/* ─── Turnover Flash ─── */
+@keyframes turnover-flash {
+  0% {
+    background-color: transparent;
+  }
+  20% {
+    background-color: rgba(239, 68, 68, 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.turnover-alert {
+  animation: turnover-flash 0.8s ease-out;
+}
+
+/* ─── Field Marker Movement ─── */
+@keyframes ball-move {
+  from {
+    transform: translateX(var(--ball-from));
+  }
+  to {
+    transform: translateX(var(--ball-to));
+  }
+}
+
+.ball-marker {
+  animation: ball-move 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ─── Glassmorphism Card ─── */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+}
+
+/* ─── Score Bug Glass ─── */
+.scorebug-glass {
+  background: rgba(10, 14, 26, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Ticker Scroll ─── */
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-content {
+  animation: ticker-scroll 30s linear infinite;
+}
+
+.ticker-content:hover {
+  animation-play-state: paused;
+}
+
+/* ─── Field Gradient ─── */
+.field-gradient {
+  background: linear-gradient(
+    180deg,
+    #2d5a27 0%,
+    #3a7a32 10%,
+    #2d6a25 50%,
+    #3a7a32 90%,
+    #2d5a27 100%
+  );
+}
+
+/* ─── Team Color Utilities ─── */
+.team-gradient-home {
+  background: linear-gradient(135deg, var(--home-primary) 0%, var(--home-secondary) 100%);
+}
+
+.team-gradient-away {
+  background: linear-gradient(135deg, var(--away-primary) 0%, var(--away-secondary) 100%);
+}
+
+/* ─── Number Counter Animation ─── */
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stat-update {
+  animation: count-up 0.3s ease-out;
+}
+
+/* ─── Playoff Bracket Lines ─── */
+.bracket-line {
+  position: relative;
+}
+
+.bracket-line::after {
+  content: '';
+  position: absolute;
+  right: -16px;
+  top: 50%;
+  width: 16px;
+  height: 2px;
+  background: var(--color-border-bright);
+}
+
+/* ─── Super Bowl Special ─── */
+@keyframes golden-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.super-bowl-text {
+  background: linear-gradient(
+    90deg,
+    var(--color-gold-dim) 0%,
+    var(--color-gold-bright) 25%,
+    var(--color-gold) 50%,
+    var(--color-gold-bright) 75%,
+    var(--color-gold-dim) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: golden-shimmer 3s linear infinite;
+}
+
+/* ─── Mobile Safe Area ─── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ─── Focus Styles (Accessibility) ─── */
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* ─── Selection Color ─── */
+::selection {
+  background: rgba(212, 175, 55, 0.3);
+  color: var(--color-text-primary);
+}
