@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import type { NarrativeSnapshot } from '@/lib/simulation/types';
 import { useGameStream } from '@/hooks/use-game-stream';
 import { useMomentum } from '@/hooks/use-momentum';
+import { useCountdown } from '@/hooks/use-countdown';
 import { buildLiveBoxScore } from '@/lib/utils/live-box-score';
+import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 import { ScoreBug } from '@/components/game/scorebug';
 import { PlayFeed } from '@/components/game/play-feed';
 import { FieldVisual } from '@/components/game/field-visual';
@@ -121,15 +123,17 @@ export function GameViewer({ gameId }: GameViewerProps) {
 
   if (status === 'game_over' && gameState) {
     return (
-      <div className={`min-h-dvh pb-4 ${celebrationClass}`}>
+      <div className={`min-h-dvh ${celebrationClass}`}>
+        <GameNav />
         <GameOverSummary
           homeTeam={gameState.homeTeam}
           awayTeam={gameState.awayTeam}
           finalScore={finalScore ?? { home: gameState.homeScore, away: gameState.awayScore }}
           boxScore={boxScore}
           mvp={mvp}
-          nextGameCountdown={intermissionCountdown}
+          nextGameCountdown={0}
         />
+        <NextGamePreview />
       </div>
     );
   }
@@ -304,6 +308,159 @@ function GameNav() {
       >
         Schedule
       </Link>
+    </div>
+  );
+}
+
+// ── Next Game Preview (shown after game over) ───────────────
+
+interface NextGameData {
+  id: string;
+  homeTeam: { abbreviation: string; name: string; city: string; mascot: string; primaryColor: string } | null;
+  awayTeam: { abbreviation: string; name: string; city: string; mascot: string; primaryColor: string } | null;
+  gameType: string;
+  week: number;
+}
+
+function NextGamePreview() {
+  const [nextGame, setNextGame] = useState<NextGameData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [countdownTarget, setCountdownTarget] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchNext() {
+      try {
+        const res = await fetch('/api/game/current');
+        const data = await res.json();
+        if (cancelled) return;
+
+        if (data.nextGame) {
+          setNextGame(data.nextGame);
+          // Countdown: 15 minutes from now (intermission duration)
+          setCountdownTarget(15 * 60);
+        }
+      } catch {
+        // Silently fail
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    // Small delay before fetching — let game_over settle
+    const timer = setTimeout(fetchNext, 1000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
+
+  const { formatted: countdown, isExpired } = useCountdown(countdownTarget, countdownTarget > 0);
+
+  if (loading) {
+    return (
+      <div className="max-w-lg mx-auto px-4 mt-4">
+        <div className="glass-card rounded-2xl p-6 text-center">
+          <div className="w-6 h-6 rounded-full border-2 border-gold/30 border-t-gold animate-spin mx-auto" />
+          <p className="text-xs text-text-muted mt-2">Finding next game...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!nextGame) {
+    return (
+      <div className="max-w-lg mx-auto px-4 mt-4">
+        <div className="glass-card rounded-2xl p-6 text-center">
+          <p className="text-xs text-text-muted tracking-wider uppercase font-bold mb-2">
+            Week Complete
+          </p>
+          <p className="text-sm text-text-secondary">
+            All games this week have been played. Next week kicks off soon.
+          </p>
+          <Link
+            href="/schedule"
+            className="inline-flex items-center gap-2 mt-4 px-5 py-2 text-sm font-medium text-gold hover:text-gold-bright transition-colors border border-gold/20 rounded-full"
+          >
+            View Standings {'\u2192'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-lg mx-auto px-4 mt-4 pb-6">
+      <div className="glass-card rounded-2xl p-6">
+        {/* Countdown */}
+        <div className="text-center mb-5">
+          <p className="text-[10px] text-text-muted tracking-wider uppercase font-bold mb-1">
+            Next Game
+          </p>
+          {!isExpired ? (
+            <div className="font-mono text-2xl font-black text-gold tabular-nums">
+              {countdown}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-gold" />
+              </span>
+              <span className="text-sm font-bold text-gold">Starting soon...</span>
+            </div>
+          )}
+        </div>
+
+        {/* Matchup */}
+        <div className="flex items-center justify-center gap-5">
+          {/* Away team */}
+          <div className="flex flex-col items-center text-center">
+            <img
+              src={getTeamLogoUrl(nextGame.awayTeam?.abbreviation ?? '???')}
+              alt={nextGame.awayTeam?.name ?? ''}
+              className="w-14 h-14 object-contain drop-shadow-lg mb-1.5"
+            />
+            <span className="text-xs text-text-muted">
+              {nextGame.awayTeam?.city ?? ''}
+            </span>
+            <span className="text-sm font-bold">
+              {nextGame.awayTeam?.mascot ?? '???'}
+            </span>
+          </div>
+
+          {/* VS */}
+          <div className="text-center">
+            <p className="text-2xl font-black text-text-muted">VS</p>
+          </div>
+
+          {/* Home team */}
+          <div className="flex flex-col items-center text-center">
+            <img
+              src={getTeamLogoUrl(nextGame.homeTeam?.abbreviation ?? '???')}
+              alt={nextGame.homeTeam?.name ?? ''}
+              className="w-14 h-14 object-contain drop-shadow-lg mb-1.5"
+            />
+            <span className="text-xs text-text-muted">
+              {nextGame.homeTeam?.city ?? ''}
+            </span>
+            <span className="text-sm font-bold">
+              {nextGame.homeTeam?.mascot ?? '???'}
+            </span>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="flex justify-center mt-5">
+          <Link
+            href={`/game/${nextGame.id}`}
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-gold text-midnight font-bold text-sm rounded-full hover:bg-gold-bright transition-colors shadow-lg shadow-gold/20"
+          >
+            MAKE YOUR PREDICTION
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
