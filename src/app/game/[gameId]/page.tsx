@@ -6,7 +6,9 @@ import { games, teams } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import { GameViewer } from '@/components/game/game-viewer';
+import { GameRecapPage } from './game-recap-page';
 import { PregameView } from './pregame-view';
+import type { Team, BoxScore, PlayerGameStats } from '@/lib/simulation/types';
 
 // ============================================================
 // Dynamic metadata for OG tags
@@ -143,6 +145,42 @@ export default async function GamePage({ params }: PageProps) {
     );
   }
 
-  // All other statuses (simulating, broadcasting, completed) get the rich viewer
+  // Completed games get the recap page with a replay toggle
+  if (game.status === 'completed' && homeTeam && awayTeam) {
+    const boxScoreData = game.boxScore as (BoxScore & { mvp?: PlayerGameStats }) | null;
+    const mvpData = boxScoreData?.mvp ?? null;
+
+    const mapTeam = (t: typeof homeTeam): Team => ({
+      id: t.id,
+      name: t.name,
+      abbreviation: t.abbreviation,
+      city: t.city,
+      mascot: t.mascot,
+      conference: t.conference as Team['conference'],
+      division: t.division as Team['division'],
+      primaryColor: t.primaryColor,
+      secondaryColor: t.secondaryColor,
+      offenseRating: t.offenseRating,
+      defenseRating: t.defenseRating,
+      specialTeamsRating: t.specialTeamsRating,
+      playStyle: t.playStyle as Team['playStyle'],
+    });
+
+    return (
+      <GameRecapPage
+        gameId={gameId}
+        homeTeam={mapTeam(homeTeam)}
+        awayTeam={mapTeam(awayTeam)}
+        finalScore={{
+          home: game.homeScore ?? 0,
+          away: game.awayScore ?? 0,
+        }}
+        boxScore={boxScoreData ?? null}
+        mvp={mvpData}
+      />
+    );
+  }
+
+  // Simulating / broadcasting games get the live viewer
   return <GameViewer gameId={gameId} />;
 }
