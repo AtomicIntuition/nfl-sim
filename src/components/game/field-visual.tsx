@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 
 interface FieldVisualProps {
   ballPosition: number;
@@ -92,9 +93,11 @@ export function FieldVisual({
             opacity: 0.7,
           }}
         >
-          <span className="text-[8px] sm:text-[10px] font-black text-white/80 tracking-widest uppercase rotate-0 select-none">
-            {awayTeam.abbreviation}
-          </span>
+          <img
+            src={getTeamLogoUrl(awayTeam.abbreviation)}
+            alt={awayTeam.abbreviation}
+            className="w-6 h-6 sm:w-8 sm:h-8 object-contain opacity-80 drop-shadow-md"
+          />
         </div>
         <div
           className="absolute right-0 top-0 bottom-0 flex items-center justify-center"
@@ -104,9 +107,11 @@ export function FieldVisual({
             opacity: 0.7,
           }}
         >
-          <span className="text-[8px] sm:text-[10px] font-black text-white/80 tracking-widest uppercase select-none">
-            {homeTeam.abbreviation}
-          </span>
+          <img
+            src={getTeamLogoUrl(homeTeam.abbreviation)}
+            alt={homeTeam.abbreviation}
+            className="w-6 h-6 sm:w-8 sm:h-8 object-contain opacity-80 drop-shadow-md"
+          />
         </div>
 
         {/* Yard lines every 10 yards (9 lines: 10, 20, 30, 40, 50, 60, 70, 80, 90) */}

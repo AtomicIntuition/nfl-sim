@@ -9,6 +9,7 @@ import {
   formatDownAndDistance,
   formatFieldPosition,
 } from '@/lib/utils/formatting';
+import { getTeamScoreboardLogoUrl } from '@/lib/utils/team-logos';
 
 interface ScoreBugProps {
   gameState: GameState;
@@ -99,12 +100,13 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
           </div>
 
           {/* Teams and scores */}
-          <div className="flex flex-col gap-0.5 min-w-[140px]">
+          <div className="flex flex-col gap-0.5 min-w-[160px]">
             {/* Away team row */}
             <div className="flex items-center gap-2">
-              <div
-                className="w-1 h-5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: awayTeam.primaryColor }}
+              <img
+                src={getTeamScoreboardLogoUrl(awayTeam.abbreviation)}
+                alt=""
+                className="w-5 h-5 flex-shrink-0 object-contain"
               />
               <span
                 className={`text-sm font-bold tracking-wide w-10 ${
@@ -126,9 +128,10 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
             </div>
             {/* Home team row */}
             <div className="flex items-center gap-2">
-              <div
-                className="w-1 h-5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: homeTeam.primaryColor }}
+              <img
+                src={getTeamScoreboardLogoUrl(homeTeam.abbreviation)}
+                alt=""
+                className="w-5 h-5 flex-shrink-0 object-contain"
               />
               <span
                 className={`text-sm font-bold tracking-wide w-10 ${
@@ -215,9 +218,10 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
 
             {/* Away */}
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              <div
-                className="w-0.5 h-4 rounded-full flex-shrink-0"
-                style={{ backgroundColor: awayTeam.primaryColor }}
+              <img
+                src={getTeamScoreboardLogoUrl(awayTeam.abbreviation)}
+                alt=""
+                className="w-4 h-4 flex-shrink-0 object-contain"
               />
               <span
                 className={`text-xs font-bold ${
@@ -267,9 +271,10 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
                   <span className="text-gold text-[8px] ml-0.5">{'\u25C0'}</span>
                 )}
               </span>
-              <div
-                className="w-0.5 h-4 rounded-full flex-shrink-0"
-                style={{ backgroundColor: homeTeam.primaryColor }}
+              <img
+                src={getTeamScoreboardLogoUrl(homeTeam.abbreviation)}
+                alt=""
+                className="w-4 h-4 flex-shrink-0 object-contain"
               />
             </div>
           </div>

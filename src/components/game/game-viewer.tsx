@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { NarrativeSnapshot } from '@/lib/simulation/types';
 import { useGameStream } from '@/hooks/use-game-stream';
 import { useMomentum } from '@/hooks/use-momentum';
+import { buildLiveBoxScore } from '@/lib/utils/live-box-score';
 import { ScoreBug } from '@/components/game/scorebug';
 import { PlayFeed } from '@/components/game/play-feed';
 import { FieldVisual } from '@/components/game/field-visual';
@@ -34,6 +35,11 @@ export function GameViewer({ gameId }: GameViewerProps) {
   } = useGameStream(gameId);
 
   const { momentum } = useMomentum(events);
+
+  // Build live box score progressively from events
+  const liveBoxScore = useMemo(() => buildLiveBoxScore(events), [events]);
+  // Use final boxScore from stream (game_over) if available, otherwise live
+  const activeBoxScore = boxScore ?? liveBoxScore;
 
   // Celebration / alert overlay state
   const [celebrationClass, setCelebrationClass] = useState('');
@@ -281,7 +287,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
           {/* Right column: box score */}
           <div className="col-span-1 overflow-y-auto pb-[72px]">
             <BoxScore
-              boxScore={boxScore}
+              boxScore={activeBoxScore}
               homeTeam={gameState.homeTeam}
               awayTeam={gameState.awayTeam}
             />
