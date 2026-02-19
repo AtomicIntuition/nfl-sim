@@ -80,93 +80,108 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
           possession
         );
 
+  const awayLeading = awayScore > homeScore;
+  const homeLeading = homeScore > awayScore;
+
   return (
     <div className="scorebug-glass border-b border-white/[0.06] z-50 flex-shrink-0">
       {/* ── Desktop layout ── */}
-      <div className="hidden sm:block max-w-4xl mx-auto">
-        {/* Main row: Away | Center | Home */}
-        <div className="flex items-center h-[56px] px-4">
-          {/* Away team side */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <img
-              src={getTeamScoreboardLogoUrl(awayTeam.abbreviation)}
-              alt=""
-              className="w-7 h-7 flex-shrink-0 object-contain"
-            />
+      <div className="hidden sm:block max-w-5xl mx-auto">
+        {/* Main scoreboard row */}
+        <div className="flex items-center px-6 py-3">
+          {/* Away team block */}
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="relative">
+              <img
+                src={getTeamScoreboardLogoUrl(awayTeam.abbreviation)}
+                alt=""
+                className="w-12 h-12 flex-shrink-0 object-contain drop-shadow-lg"
+              />
+              {possession === 'away' && (
+                <div
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: awayTeam.primaryColor, boxShadow: `0 0 6px ${awayTeam.primaryColor}` }}
+                />
+              )}
+            </div>
+            <div className="flex flex-col">
+              <span
+                className={`text-lg font-black tracking-wide leading-tight ${
+                  possession === 'away' ? 'text-text-primary' : 'text-text-secondary'
+                }`}
+              >
+                {awayTeam.abbreviation}
+              </span>
+              <TimeoutDots remaining={awayTimeouts} color={awayTeam.primaryColor} />
+            </div>
             <span
-              className={`text-sm font-bold tracking-wide ${
-                possession === 'away' ? 'text-text-primary' : 'text-text-secondary'
-              }`}
-            >
-              {awayTeam.abbreviation}
-            </span>
-            {possession === 'away' && (
-              <span className="text-gold text-[8px]">{'\u25B6'}</span>
-            )}
-            <TimeoutDots remaining={awayTimeouts} color={awayTeam.primaryColor} />
-            <span
-              className={`font-mono text-2xl font-black tabular-nums ml-auto ${
-                awayScoreAnim ? 'score-update' : ''
+              className={`font-mono text-5xl font-black tabular-nums ml-auto transition-all duration-300 ${
+                awayScoreAnim ? 'score-update text-gold' : awayLeading ? 'text-text-primary' : 'text-text-secondary'
               }`}
             >
               {awayScore}
             </span>
           </div>
 
-          {/* Center: clock + quarter + status */}
-          <div className="flex flex-col items-center mx-6 min-w-[100px]">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-text-secondary tracking-widest uppercase">
-                {formatQuarter(quarter)}
-              </span>
-              {status === 'live' ? (
-                <Badge variant="live" size="sm" pulse>LIVE</Badge>
-              ) : (
-                <Badge variant="final" size="sm">FINAL</Badge>
-              )}
-            </div>
-            <span className="font-mono text-xl font-black tabular-nums text-text-primary leading-tight">
+          {/* Center: quarter + clock + status */}
+          <div className="flex flex-col items-center mx-8 min-w-[140px]">
+            {status === 'live' ? (
+              <Badge variant="live" size="md" pulse>LIVE</Badge>
+            ) : (
+              <Badge variant="final" size="md">FINAL</Badge>
+            )}
+            <span className="font-mono text-3xl font-black tabular-nums text-text-primary mt-1 leading-tight">
               {isHalftime ? 'HALF' : clockDisplay}
+            </span>
+            <span className="text-xs font-bold text-text-muted tracking-widest uppercase mt-0.5">
+              {formatQuarter(quarter)}
             </span>
           </div>
 
-          {/* Home team side */}
-          <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
+          {/* Home team block */}
+          <div className="flex items-center gap-4 flex-1 min-w-0 justify-end">
             <span
-              className={`font-mono text-2xl font-black tabular-nums mr-auto ${
-                homeScoreAnim ? 'score-update' : ''
+              className={`font-mono text-5xl font-black tabular-nums mr-auto transition-all duration-300 ${
+                homeScoreAnim ? 'score-update text-gold' : homeLeading ? 'text-text-primary' : 'text-text-secondary'
               }`}
             >
               {homeScore}
             </span>
-            <TimeoutDots remaining={homeTimeouts} color={homeTeam.primaryColor} />
-            {possession === 'home' && (
-              <span className="text-gold text-[8px]">{'\u25C0'}</span>
-            )}
-            <span
-              className={`text-sm font-bold tracking-wide ${
-                possession === 'home' ? 'text-text-primary' : 'text-text-secondary'
-              }`}
-            >
-              {homeTeam.abbreviation}
-            </span>
-            <img
-              src={getTeamScoreboardLogoUrl(homeTeam.abbreviation)}
-              alt=""
-              className="w-7 h-7 flex-shrink-0 object-contain"
-            />
+            <div className="flex flex-col items-end">
+              <span
+                className={`text-lg font-black tracking-wide leading-tight ${
+                  possession === 'home' ? 'text-text-primary' : 'text-text-secondary'
+                }`}
+              >
+                {homeTeam.abbreviation}
+              </span>
+              <TimeoutDots remaining={homeTimeouts} color={homeTeam.primaryColor} />
+            </div>
+            <div className="relative">
+              <img
+                src={getTeamScoreboardLogoUrl(homeTeam.abbreviation)}
+                alt=""
+                className="w-12 h-12 flex-shrink-0 object-contain drop-shadow-lg"
+              />
+              {possession === 'home' && (
+                <div
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: homeTeam.primaryColor, boxShadow: `0 0 6px ${homeTeam.primaryColor}` }}
+                />
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Situation row */}
-        <div className="flex items-center justify-center gap-3 h-6 border-t border-white/[0.04]">
-          <span className="text-[11px] font-bold text-text-secondary tracking-wide">
+        {/* Situation bar */}
+        <div className="flex items-center justify-center gap-4 h-8 border-t border-white/[0.06] bg-white/[0.02]">
+          <span className="text-sm font-bold text-text-primary tracking-wide">
             {situationText}
           </span>
           {fieldPosText && (
             <>
-              <span className="text-[10px] text-border">{'|'}</span>
-              <span className="text-[11px] text-text-muted font-medium">
+              <span className="text-xs text-border-bright">{'|'}</span>
+              <span className="text-sm text-text-secondary font-semibold">
                 {fieldPosText}
               </span>
             </>
@@ -176,28 +191,33 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
 
       {/* ── Mobile layout ── */}
       <div className="sm:hidden">
-        {/* Main row: Away | Clock | Home */}
-        <div className="flex items-center h-11 px-3">
+        {/* Main scoreboard row */}
+        <div className="flex items-center px-4 py-2.5">
           {/* Away side */}
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <img
-              src={getTeamScoreboardLogoUrl(awayTeam.abbreviation)}
-              alt=""
-              className="w-5 h-5 flex-shrink-0 object-contain"
-            />
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <div className="relative">
+              <img
+                src={getTeamScoreboardLogoUrl(awayTeam.abbreviation)}
+                alt=""
+                className="w-9 h-9 flex-shrink-0 object-contain drop-shadow-lg"
+              />
+              {possession === 'away' && (
+                <div
+                  className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+                  style={{ backgroundColor: awayTeam.primaryColor, boxShadow: `0 0 4px ${awayTeam.primaryColor}` }}
+                />
+              )}
+            </div>
             <span
-              className={`text-xs font-bold ${
+              className={`text-sm font-black tracking-wide ${
                 possession === 'away' ? 'text-text-primary' : 'text-text-secondary'
               }`}
             >
               {awayTeam.abbreviation}
             </span>
-            {possession === 'away' && (
-              <span className="text-gold text-[7px]">{'\u25B6'}</span>
-            )}
             <span
-              className={`font-mono text-lg font-black tabular-nums ml-auto ${
-                awayScoreAnim ? 'score-update' : ''
+              className={`font-mono text-3xl font-black tabular-nums ml-auto ${
+                awayScoreAnim ? 'score-update text-gold' : awayLeading ? 'text-text-primary' : 'text-text-secondary'
               }`}
             >
               {awayScore}
@@ -205,58 +225,68 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
           </div>
 
           {/* Center: clock + quarter */}
-          <div className="flex flex-col items-center mx-3 min-w-[60px]">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[8px] font-bold text-text-muted tracking-widest uppercase">
-                {formatQuarter(quarter)}
-              </span>
-              {status === 'live' ? (
-                <Badge variant="live" size="sm" pulse>LIVE</Badge>
-              ) : (
-                <Badge variant="final" size="sm">FINAL</Badge>
-              )}
-            </div>
-            <span className="font-mono text-sm font-black tabular-nums leading-none">
+          <div className="flex flex-col items-center mx-4 min-w-[80px]">
+            {status === 'live' ? (
+              <Badge variant="live" size="sm" pulse>LIVE</Badge>
+            ) : (
+              <Badge variant="final" size="sm">FINAL</Badge>
+            )}
+            <span className="font-mono text-xl font-black tabular-nums text-text-primary mt-0.5 leading-tight">
               {isHalftime ? 'HALF' : clockDisplay}
+            </span>
+            <span className="text-[9px] font-bold text-text-muted tracking-widest uppercase">
+              {formatQuarter(quarter)}
             </span>
           </div>
 
           {/* Home side */}
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+          <div className="flex items-center gap-2.5 flex-1 min-w-0 justify-end">
             <span
-              className={`font-mono text-lg font-black tabular-nums mr-auto ${
-                homeScoreAnim ? 'score-update' : ''
+              className={`font-mono text-3xl font-black tabular-nums mr-auto ${
+                homeScoreAnim ? 'score-update text-gold' : homeLeading ? 'text-text-primary' : 'text-text-secondary'
               }`}
             >
               {homeScore}
             </span>
-            {possession === 'home' && (
-              <span className="text-gold text-[7px]">{'\u25C0'}</span>
-            )}
             <span
-              className={`text-xs font-bold ${
+              className={`text-sm font-black tracking-wide ${
                 possession === 'home' ? 'text-text-primary' : 'text-text-secondary'
               }`}
             >
               {homeTeam.abbreviation}
             </span>
-            <img
-              src={getTeamScoreboardLogoUrl(homeTeam.abbreviation)}
-              alt=""
-              className="w-5 h-5 flex-shrink-0 object-contain"
-            />
+            <div className="relative">
+              <img
+                src={getTeamScoreboardLogoUrl(homeTeam.abbreviation)}
+                alt=""
+                className="w-9 h-9 flex-shrink-0 object-contain drop-shadow-lg"
+              />
+              {possession === 'home' && (
+                <div
+                  className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+                  style={{ backgroundColor: homeTeam.primaryColor, boxShadow: `0 0 4px ${homeTeam.primaryColor}` }}
+                />
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Situation row: timeouts + situation + timeouts */}
-        <div className="flex items-center h-6 px-3 gap-2 border-t border-white/[0.04]">
+        {/* Situation bar */}
+        <div className="flex items-center justify-between h-7 px-4 border-t border-white/[0.04] bg-white/[0.02]">
           <TimeoutDots remaining={awayTimeouts} color={awayTeam.primaryColor} size="sm" />
-          <span className="text-[10px] font-bold text-text-secondary tracking-wide flex-1 text-center">
-            {situationText}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-text-primary tracking-wide">
+              {situationText}
+            </span>
             {fieldPosText && (
-              <span className="text-text-muted font-medium ml-1.5">{fieldPosText}</span>
+              <>
+                <span className="text-[10px] text-border">{'|'}</span>
+                <span className="text-xs text-text-secondary font-medium">
+                  {fieldPosText}
+                </span>
+              </>
             )}
-          </span>
+          </div>
           <TimeoutDots remaining={homeTimeouts} color={homeTeam.primaryColor} size="sm" />
         </div>
       </div>
@@ -273,17 +303,18 @@ function TimeoutDots({
   color: string;
   size?: 'sm' | 'md';
 }) {
-  const dotSize = size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2';
+  const dotSize = size === 'sm' ? 'w-1.5 h-1.5' : 'w-2.5 h-2.5';
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-1">
       {[1, 2, 3].map((i) => (
         <div
           key={i}
-          className={`${dotSize} rounded-full transition-colors duration-300`}
+          className={`${dotSize} rounded-full transition-all duration-300`}
           style={{
             backgroundColor: i <= remaining ? color : 'transparent',
-            border: `1.5px solid ${i <= remaining ? color : 'rgba(100, 116, 139, 0.4)'}`,
+            border: `1.5px solid ${i <= remaining ? color : 'rgba(100, 116, 139, 0.3)'}`,
+            boxShadow: i <= remaining ? `0 0 4px ${color}40` : 'none',
           }}
         />
       ))}

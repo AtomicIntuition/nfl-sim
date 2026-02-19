@@ -6,6 +6,7 @@ import type { NarrativeSnapshot } from '@/lib/simulation/types';
 import { useGameStream } from '@/hooks/use-game-stream';
 import { useMomentum } from '@/hooks/use-momentum';
 import { useCountdown } from '@/hooks/use-countdown';
+import { useDynamicTab } from '@/hooks/use-dynamic-tab';
 import { buildLiveBoxScore } from '@/lib/utils/live-box-score';
 import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 import { ScoreBug } from '@/components/game/scorebug';
@@ -43,6 +44,30 @@ export function GameViewer({ gameId }: GameViewerProps) {
   const liveBoxScore = useMemo(() => buildLiveBoxScore(events), [events]);
   // Use final boxScore from stream (game_over) if available, otherwise live
   const activeBoxScore = boxScore ?? liveBoxScore;
+
+  // Dynamic browser tab: team logos + score
+  const tabStatusText = useMemo(() => {
+    if (status === 'game_over') return 'FINAL';
+    if (status === 'intermission') return 'INTERMISSION';
+    if (!gameState) return 'LIVE';
+    if (gameState.isHalftime) return 'HALFTIME';
+    const q = gameState.quarter === 'OT' ? 'OT' : `Q${gameState.quarter}`;
+    const mins = Math.floor(gameState.clock / 60);
+    const secs = gameState.clock % 60;
+    return `${q} ${mins}:${secs.toString().padStart(2, '0')}`;
+  }, [status, gameState?.quarter, gameState?.clock, gameState?.isHalftime]);
+
+  useDynamicTab(
+    gameState
+      ? {
+          awayAbbrev: gameState.awayTeam.abbreviation,
+          homeAbbrev: gameState.homeTeam.abbreviation,
+          awayScore: gameState.awayScore,
+          homeScore: gameState.homeScore,
+          statusText: tabStatusText,
+        }
+      : null
+  );
 
   // Celebration / alert overlay state
   const [celebrationClass, setCelebrationClass] = useState('');

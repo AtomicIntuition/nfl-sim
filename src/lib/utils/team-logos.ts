@@ -53,7 +53,7 @@ const ESPN_ABBREV_MAP: Record<string, string> = {
  */
 export function getTeamLogoUrl(abbreviation: string, size: 500 | 100 = 500): string {
   const espnAbbrev = ESPN_ABBREV_MAP[abbreviation] ?? abbreviation.toLowerCase();
-  return `https://a.espncdn.com/i/teamlogos/nfl/500/${espnAbbrev}.png`;
+  return `https://a.espncdn.com/i/teamlogos/nfl/${size}/${espnAbbrev}.png`;
 }
 
 /**
