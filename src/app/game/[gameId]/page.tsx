@@ -5,7 +5,8 @@ import { db } from '@/lib/db';
 import { games, teams } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
-import { GameViewer } from './game-viewer';
+import { GameViewer } from '@/components/game/game-viewer';
+import { PregameView } from './pregame-view';
 
 // ============================================================
 // Dynamic metadata for OG tags
@@ -104,38 +105,44 @@ export default async function GamePage({ params }: PageProps) {
     db.select().from(teams).where(eq(teams.id, game.awayTeamId)).limit(1),
   ]);
 
-  const initialData = {
-    id: game.id,
-    status: game.status,
-    gameType: game.gameType,
-    week: game.week,
-    homeTeam: homeTeamRows[0]
-      ? {
-          id: homeTeamRows[0].id,
-          name: homeTeamRows[0].name,
-          abbreviation: homeTeamRows[0].abbreviation,
-          city: homeTeamRows[0].city,
-          mascot: homeTeamRows[0].mascot,
-          primaryColor: homeTeamRows[0].primaryColor,
-          secondaryColor: homeTeamRows[0].secondaryColor,
-        }
-      : null,
-    awayTeam: awayTeamRows[0]
-      ? {
-          id: awayTeamRows[0].id,
-          name: awayTeamRows[0].name,
-          abbreviation: awayTeamRows[0].abbreviation,
-          city: awayTeamRows[0].city,
-          mascot: awayTeamRows[0].mascot,
-          primaryColor: awayTeamRows[0].primaryColor,
-          secondaryColor: awayTeamRows[0].secondaryColor,
-        }
-      : null,
-    homeScore: game.status === 'completed' ? (game.homeScore ?? 0) : 0,
-    awayScore: game.status === 'completed' ? (game.awayScore ?? 0) : 0,
-    isFeatured: game.isFeatured,
-    broadcastStartedAt: game.broadcastStartedAt?.toISOString() ?? null,
-  };
+  const homeTeam = homeTeamRows[0] ?? null;
+  const awayTeam = awayTeamRows[0] ?? null;
 
-  return <GameViewer gameId={gameId} initialData={initialData} />;
+  // Scheduled games get the pregame view with prediction widget
+  if (game.status === 'scheduled') {
+    return (
+      <PregameView
+        gameId={gameId}
+        week={game.week}
+        gameType={game.gameType}
+        homeTeam={
+          homeTeam
+            ? {
+                id: homeTeam.id,
+                name: homeTeam.name,
+                abbreviation: homeTeam.abbreviation,
+                city: homeTeam.city,
+                mascot: homeTeam.mascot,
+                primaryColor: homeTeam.primaryColor,
+              }
+            : null
+        }
+        awayTeam={
+          awayTeam
+            ? {
+                id: awayTeam.id,
+                name: awayTeam.name,
+                abbreviation: awayTeam.abbreviation,
+                city: awayTeam.city,
+                mascot: awayTeam.mascot,
+                primaryColor: awayTeam.primaryColor,
+              }
+            : null
+        }
+      />
+    );
+  }
+
+  // All other statuses (simulating, broadcasting, completed) get the rich viewer
+  return <GameViewer gameId={gameId} />;
 }

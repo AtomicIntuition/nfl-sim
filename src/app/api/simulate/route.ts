@@ -6,13 +6,21 @@ import {
   games,
   seasons,
   teams,
+  players,
   gameEvents,
   standings,
 } from '@/lib/db/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { generateSeasonSchedule } from '@/lib/scheduling/schedule-generator';
 import { calculatePlayoffSeeds } from '@/lib/scheduling/playoff-manager';
-import type { Team, DivisionStandings, TeamStanding } from '@/lib/simulation/types';
+import { simulateGame } from '@/lib/simulation/engine';
+import type {
+  Team,
+  Player as SimPlayer,
+  GameType,
+  DivisionStandings,
+  TeamStanding,
+} from '@/lib/simulation/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minute timeout for simulation
@@ -438,6 +446,44 @@ async function handleCreateSeason() {
   };
 }
 
+// ============================================================
+// Mappers: DB rows → simulation engine types
+// ============================================================
+
+function mapDbTeamToSim(t: typeof teams.$inferSelect): Team {
+  return {
+    id: t.id,
+    name: t.name,
+    abbreviation: t.abbreviation,
+    city: t.city,
+    mascot: t.mascot,
+    conference: t.conference,
+    division: t.division,
+    primaryColor: t.primaryColor,
+    secondaryColor: t.secondaryColor,
+    offenseRating: t.offenseRating,
+    defenseRating: t.defenseRating,
+    specialTeamsRating: t.specialTeamsRating,
+    playStyle: t.playStyle,
+  };
+}
+
+function mapDbPlayerToSim(p: typeof players.$inferSelect): SimPlayer {
+  return {
+    id: p.id,
+    teamId: p.teamId,
+    name: p.name,
+    position: p.position,
+    number: p.number,
+    rating: p.rating,
+    speed: p.speed,
+    strength: p.strength,
+    awareness: p.awareness,
+    clutchRating: p.clutchRating,
+    injuryProne: p.injuryProne ?? false,
+  };
+}
+
 async function handleStartGame(seasonId: string, gameId: string) {
   // Mark game as simulating
   await db
@@ -467,42 +513,84 @@ async function handleStartGame(seasonId: string, gameId: string) {
   const homeTeam = homeTeamRows[0];
   const awayTeam = awayTeamRows[0];
 
-  // Generate a simple simulated game result
-  // In production, this calls the full simulation engine
-  const { events, finalHomeScore, finalAwayScore, boxScore } =
-    generateSimulatedEvents(homeTeam, awayTeam, gameId);
+  if (!homeTeam || !awayTeam) {
+    return { error: 'Team data not found' };
+  }
 
-  // Store all events
-  if (events.length > 0) {
-    // Batch insert events (in chunks to avoid query size limits)
+  // Fetch player rosters for both teams
+  const [homePlayerRows, awayPlayerRows] = await Promise.all([
+    db.select().from(players).where(eq(players.teamId, homeTeam.id)),
+    db.select().from(players).where(eq(players.teamId, awayTeam.id)),
+  ]);
+
+  // Map DB rows to simulation engine types
+  const simHomeTeam = mapDbTeamToSim(homeTeam);
+  const simAwayTeam = mapDbTeamToSim(awayTeam);
+  const simHomePlayers = homePlayerRows.map(mapDbPlayerToSim);
+  const simAwayPlayers = awayPlayerRows.map(mapDbPlayerToSim);
+
+  // Run the full simulation engine
+  const simResult = simulateGame({
+    homeTeam: simHomeTeam,
+    awayTeam: simAwayTeam,
+    homePlayers: simHomePlayers,
+    awayPlayers: simAwayPlayers,
+    gameType: game.gameType as GameType,
+  });
+
+  // Map engine events to DB event rows
+  const dbEvents = simResult.events.map((event, idx) => ({
+    gameId,
+    eventNumber: idx + 1,
+    eventType: event.playResult.type,
+    playResult: event.playResult as unknown as Record<string, unknown>,
+    commentary: event.commentary as unknown as Record<string, unknown>,
+    gameState: event.gameState as unknown as Record<string, unknown>,
+    narrativeContext: event.narrativeContext as unknown as Record<string, unknown>,
+    displayTimestamp: event.timestamp,
+  }));
+
+  // Batch insert events
+  if (dbEvents.length > 0) {
     const BATCH_SIZE = 50;
-    for (let i = 0; i < events.length; i += BATCH_SIZE) {
-      const batch = events.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < dbEvents.length; i += BATCH_SIZE) {
+      const batch = dbEvents.slice(i, i + BATCH_SIZE);
       await db.insert(gameEvents).values(batch);
     }
   }
 
-  // Update game to broadcasting status with final score
+  // Embed MVP in boxScore JSON so the stream endpoint can read it
+  const boxScoreWithMvp = {
+    ...simResult.boxScore as unknown as Record<string, unknown>,
+    mvp: simResult.mvp,
+  };
+
+  // Update game to broadcasting status with final score and provably-fair seeds
   const now = new Date();
   await db
     .update(games)
     .set({
       status: 'broadcasting',
-      homeScore: finalHomeScore,
-      awayScore: finalAwayScore,
-      boxScore,
-      totalPlays: events.length,
+      homeScore: simResult.finalScore.home,
+      awayScore: simResult.finalScore.away,
+      boxScore: boxScoreWithMvp,
+      totalPlays: simResult.totalPlays,
       broadcastStartedAt: now,
+      serverSeedHash: simResult.serverSeedHash,
+      serverSeed: simResult.serverSeed,
+      clientSeed: simResult.clientSeed,
+      nonce: simResult.nonce,
+      mvpPlayerId: simResult.mvp?.player?.id ?? null,
     })
     .where(eq(games.id, gameId));
 
   return {
     gameId,
-    homeTeam: homeTeam?.abbreviation,
-    awayTeam: awayTeam?.abbreviation,
-    totalEvents: events.length,
-    finalScore: `${finalHomeScore}-${finalAwayScore}`,
-    message: `Game ${homeTeam?.abbreviation} vs ${awayTeam?.abbreviation} is now broadcasting`,
+    homeTeam: homeTeam.abbreviation,
+    awayTeam: awayTeam.abbreviation,
+    totalEvents: dbEvents.length,
+    finalScore: `${simResult.finalScore.home}-${simResult.finalScore.away}`,
+    message: `Game ${homeTeam.abbreviation} vs ${awayTeam.abbreviation} is now broadcasting`,
   };
 }
 
@@ -1421,351 +1509,3 @@ async function pickBestFeaturedGame(
   return bestId;
 }
 
-// ============================================================
-// Helper: Generate simulated game events
-// ============================================================
-
-function generateSimulatedEvents(
-  homeTeam: typeof teams.$inferSelect,
-  awayTeam: typeof teams.$inferSelect,
-  gameId: string
-) {
-  // Simplified simulation that generates realistic-looking events.
-  // In the full version, this delegates to the complete simulation engine.
-
-  const events: Array<{
-    gameId: string;
-    eventNumber: number;
-    eventType: string;
-    playResult: Record<string, unknown>;
-    commentary: Record<string, unknown>;
-    gameState: Record<string, unknown>;
-    narrativeContext: Record<string, unknown>;
-    displayTimestamp: number;
-  }> = [];
-
-  let homeScore = 0;
-  let awayScore = 0;
-  let eventNumber = 0;
-  let timestampMs = 0;
-  let possession: 'home' | 'away' = 'away'; // Away team receives opening kickoff
-  let quarter = 1;
-  let clock = 900;
-  let ballPosition = 25;
-  let down = 1;
-  let yardsToGo = 10;
-
-  const homeRating = (homeTeam.offenseRating + homeTeam.defenseRating) / 2;
-  const awayRating = (awayTeam.offenseRating + awayTeam.defenseRating) / 2;
-
-  // Simulate approximately 120-140 plays per game
-  const totalPlays = 120 + Math.floor(Math.random() * 20);
-
-  for (let play = 0; play < totalPlays; play++) {
-    eventNumber++;
-    timestampMs += 2000 + Math.floor(Math.random() * 3000); // 2-5 seconds between plays
-
-    // Determine play outcome
-    const offenseRating =
-      possession === 'home' ? homeTeam.offenseRating : awayTeam.offenseRating;
-    const defenseRating =
-      possession === 'home' ? awayTeam.defenseRating : homeTeam.defenseRating;
-
-    const advantageModifier = (offenseRating - defenseRating) / 100;
-    const rand = Math.random();
-    let yardsGained = 0;
-    let playType = 'run';
-    let playDescription = '';
-    let scoring = null;
-    let turnover = null;
-
-    // Play type distribution
-    if (rand < 0.45) {
-      // Run play
-      playType = 'run';
-      yardsGained = Math.round(
-        (Math.random() * 8 - 1 + advantageModifier * 3)
-      );
-      playDescription = `${possession === 'home' ? homeTeam.abbreviation : awayTeam.abbreviation} runs for ${yardsGained > 0 ? yardsGained : 'no'} yards`;
-    } else if (rand < 0.85) {
-      // Pass play
-      const complete = Math.random() < 0.62 + advantageModifier * 0.1;
-      if (complete) {
-        playType = 'pass_complete';
-        yardsGained = Math.round(Math.random() * 20 - 2 + advantageModifier * 5);
-        playDescription = `Pass complete for ${yardsGained} yards`;
-      } else {
-        playType = 'pass_incomplete';
-        yardsGained = 0;
-        playDescription = 'Pass incomplete';
-      }
-    } else if (rand < 0.88) {
-      // Sack
-      playType = 'sack';
-      yardsGained = -Math.floor(Math.random() * 8 + 1);
-      playDescription = `Sack for a loss of ${Math.abs(yardsGained)} yards`;
-    } else if (rand < 0.92) {
-      // Turnover
-      playType = Math.random() < 0.5 ? 'pass_incomplete' : 'run';
-      turnover = {
-        type: Math.random() < 0.6 ? 'interception' : 'fumble',
-        recoveredBy: possession === 'home' ? 'away' : 'home',
-        returnYards: Math.floor(Math.random() * 20),
-        returnedForTD: false,
-      };
-      yardsGained = 0;
-      playDescription = `TURNOVER! ${turnover.type === 'interception' ? 'Intercepted' : 'Fumble recovered'}!`;
-    } else {
-      // Penalty
-      playType = 'run';
-      yardsGained = 0;
-      playDescription = 'Flag on the play - penalty assessed';
-    }
-
-    // Update ball position
-    ballPosition += yardsGained;
-
-    // Check for touchdown
-    if (ballPosition >= 100 && !turnover) {
-      ballPosition = 97; // Will be handled as TD
-      scoring = {
-        type: 'touchdown',
-        team: possession,
-        points: 7, // Assume extra point made
-        scorer: null,
-      };
-      if (possession === 'home') {
-        homeScore += 7;
-      } else {
-        awayScore += 7;
-      }
-      playDescription += ' - TOUCHDOWN!';
-      ballPosition = 25; // Reset after TD
-      down = 1;
-      yardsToGo = 10;
-      possession = possession === 'home' ? 'away' : 'home';
-    } else if (turnover) {
-      // Switch possession on turnover
-      ballPosition = Math.max(1, Math.min(99, 100 - ballPosition));
-      possession = possession === 'home' ? 'away' : 'home';
-      down = 1;
-      yardsToGo = 10;
-    } else if (ballPosition <= 0) {
-      // Safety
-      ballPosition = 20;
-      scoring = {
-        type: 'safety',
-        team: possession === 'home' ? 'away' : 'home',
-        points: 2,
-        scorer: null,
-      };
-      if (possession === 'home') {
-        awayScore += 2;
-      } else {
-        homeScore += 2;
-      }
-      possession = possession === 'home' ? 'away' : 'home';
-      down = 1;
-      yardsToGo = 10;
-    } else {
-      // Normal play -- advance down
-      yardsToGo -= yardsGained;
-      if (yardsToGo <= 0) {
-        // First down
-        down = 1;
-        yardsToGo = Math.min(10, 100 - ballPosition);
-      } else {
-        down++;
-        if (down > 4) {
-          // Turnover on downs or punt
-          if (ballPosition > 60 && Math.random() < 0.3) {
-            // Field goal attempt
-            const fgGood = Math.random() < 0.8 - (100 - ballPosition) * 0.01;
-            if (fgGood) {
-              scoring = {
-                type: 'field_goal',
-                team: possession,
-                points: 3,
-                scorer: null,
-              };
-              if (possession === 'home') {
-                homeScore += 3;
-              } else {
-                awayScore += 3;
-              }
-              playDescription = 'Field goal is GOOD!';
-            } else {
-              playDescription = 'Field goal attempt is NO GOOD';
-            }
-          } else {
-            playDescription = 'Punt';
-          }
-          // Switch possession
-          ballPosition = Math.max(
-            10,
-            Math.min(90, 100 - ballPosition + (Math.random() * 15 + 30))
-          );
-          possession = possession === 'home' ? 'away' : 'home';
-          down = 1;
-          yardsToGo = 10;
-        }
-      }
-    }
-
-    // Update clock
-    const clockUsed = Math.floor(Math.random() * 35) + 5;
-    clock -= clockUsed;
-    if (clock <= 0) {
-      quarter++;
-      clock = 900;
-      if (quarter > 4) {
-        // Game over -- break out early
-        break;
-      }
-    }
-
-    ballPosition = Math.max(1, Math.min(99, Math.round(ballPosition)));
-
-    const event = {
-      gameId,
-      eventNumber,
-      eventType: playType,
-      playResult: {
-        type: playType,
-        call: playType === 'run' ? 'run_inside' : 'pass_short',
-        description: playDescription,
-        yardsGained,
-        passer: null,
-        rusher: null,
-        receiver: null,
-        defender: null,
-        turnover,
-        penalty: null,
-        injury: null,
-        scoring,
-        clockElapsed: clockUsed,
-        isClockStopped: playType === 'pass_incomplete',
-        isFirstDown: down === 1 && yardsToGo === 10,
-        isTouchdown: !!scoring && scoring.type === 'touchdown',
-        isSafety: !!scoring && scoring.type === 'safety',
-      },
-      commentary: {
-        playByPlay: playDescription,
-        colorAnalysis:
-          scoring
-            ? 'What a play! That changes the complexion of this game.'
-            : 'Solid execution on that play.',
-        crowdReaction: scoring ? 'roar' : 'murmur',
-        excitement: scoring ? 85 : 30 + Math.floor(Math.random() * 30),
-      },
-      gameState: {
-        id: gameId,
-        homeTeam: {
-          id: homeTeam.id,
-          name: homeTeam.name,
-          abbreviation: homeTeam.abbreviation,
-          city: homeTeam.city,
-          mascot: homeTeam.mascot,
-          conference: homeTeam.conference,
-          division: homeTeam.division,
-          primaryColor: homeTeam.primaryColor,
-          secondaryColor: homeTeam.secondaryColor,
-          offenseRating: homeTeam.offenseRating,
-          defenseRating: homeTeam.defenseRating,
-          specialTeamsRating: homeTeam.specialTeamsRating,
-          playStyle: homeTeam.playStyle,
-        },
-        awayTeam: {
-          id: awayTeam.id,
-          name: awayTeam.name,
-          abbreviation: awayTeam.abbreviation,
-          city: awayTeam.city,
-          mascot: awayTeam.mascot,
-          conference: awayTeam.conference,
-          division: awayTeam.division,
-          primaryColor: awayTeam.primaryColor,
-          secondaryColor: awayTeam.secondaryColor,
-          offenseRating: awayTeam.offenseRating,
-          defenseRating: awayTeam.defenseRating,
-          specialTeamsRating: awayTeam.specialTeamsRating,
-          playStyle: awayTeam.playStyle,
-        },
-        homeScore,
-        awayScore,
-        quarter: Math.min(quarter, 4) as 1 | 2 | 3 | 4,
-        clock: Math.max(0, clock),
-        playClock: 40,
-        possession,
-        down: Math.min(down, 4) as 1 | 2 | 3 | 4,
-        yardsToGo: Math.max(1, yardsToGo),
-        ballPosition,
-        homeTimeouts: 3,
-        awayTimeouts: 3,
-        isClockRunning: playType !== 'pass_incomplete',
-        twoMinuteWarning: clock <= 120,
-        isHalftime: quarter === 2 && clock <= 0,
-        kickoff: false,
-        patAttempt: false,
-      },
-      narrativeContext: {
-        momentum: homeScore > awayScore ? 30 : awayScore > homeScore ? -30 : 0,
-        excitement: scoring ? 85 : 40,
-        activeThreads: [],
-        isComebackBrewing:
-          Math.abs(homeScore - awayScore) >= 14 && quarter >= 3,
-        isClutchMoment: quarter >= 4 && Math.abs(homeScore - awayScore) <= 7,
-        isBlowout: Math.abs(homeScore - awayScore) >= 21,
-        isDominatingPerformance: null,
-      },
-      displayTimestamp: timestampMs,
-    };
-
-    events.push(event);
-  }
-
-  const boxScore = {
-    homeStats: {
-      totalYards: 0,
-      passingYards: 0,
-      rushingYards: 0,
-      firstDowns: 0,
-      thirdDownConversions: 0,
-      thirdDownAttempts: 0,
-      fourthDownConversions: 0,
-      fourthDownAttempts: 0,
-      turnovers: 0,
-      penalties: 0,
-      penaltyYards: 0,
-      timeOfPossession: 1800,
-      sacks: 0,
-      sacksAllowed: 0,
-      redZoneAttempts: 0,
-      redZoneTDs: 0,
-    },
-    awayStats: {
-      totalYards: 0,
-      passingYards: 0,
-      rushingYards: 0,
-      firstDowns: 0,
-      thirdDownConversions: 0,
-      thirdDownAttempts: 0,
-      fourthDownConversions: 0,
-      fourthDownAttempts: 0,
-      turnovers: 0,
-      penalties: 0,
-      penaltyYards: 0,
-      timeOfPossession: 1800,
-      sacks: 0,
-      sacksAllowed: 0,
-      redZoneAttempts: 0,
-      redZoneTDs: 0,
-    },
-  };
-
-  return {
-    events,
-    finalHomeScore: homeScore,
-    finalAwayScore: awayScore,
-    boxScore,
-  };
-}

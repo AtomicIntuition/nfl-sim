@@ -247,7 +247,7 @@ export async function GET(
               home: game.homeScore ?? 0,
               away: game.awayScore ?? 0,
             },
-            mvp: null, // MVP data is stored in boxScore
+            mvp: (game.boxScore as Record<string, unknown>)?.mvp ?? null
           });
         }
 

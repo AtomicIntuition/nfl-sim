@@ -120,9 +120,25 @@ async function getHomePageData() {
     const elapsed = Date.now() - recentFeatured.completedAt.getTime();
     if (elapsed < INTERMISSION_MS) {
       const hydratedCompleted = await hydrateGame(recentFeatured);
-      const upcomingGame = weekGames.find(
-        (g) => g.status === 'scheduled' && !g.isFeatured
-      );
+
+      // Look for next scheduled game in current week first
+      let upcomingGame = weekGames.find((g) => g.status === 'scheduled');
+
+      // If no scheduled games remain this week, look at next week
+      if (!upcomingGame) {
+        const nextWeekGames = await db
+          .select()
+          .from(games)
+          .where(
+            and(
+              eq(games.seasonId, season.id),
+              eq(games.week, season.currentWeek + 1)
+            )
+          );
+        upcomingGame =
+          nextWeekGames.find((g) => g.isFeatured) ?? nextWeekGames[0] ?? undefined;
+      }
+
       const hydratedUpcoming = await hydrateGame(upcomingGame);
       if (hydratedCompleted) {
         intermission = {
