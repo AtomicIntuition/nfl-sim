@@ -268,6 +268,10 @@ export interface PlayResult {
   isFirstDown: boolean;
   isTouchdown: boolean;
   isSafety: boolean;
+  /** Offensive formation used for this play (if applicable). */
+  formation?: Formation;
+  /** Defensive call used against this play (if applicable). */
+  defensiveCall?: DefensiveCall;
 }
 
 // ============================================================

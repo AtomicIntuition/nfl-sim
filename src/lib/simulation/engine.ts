@@ -478,6 +478,10 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
         formation,
         defensiveCall,
       );
+
+      // Attach formation & defense data to PlayResult for UI rendering
+      if (formation) playResult.formation = formation;
+      if (defensiveCall) playResult.defensiveCall = defensiveCall;
     }
 
     // --- (d) Check for penalty ---

@@ -83,8 +83,24 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
   const awayLeading = awayScore > homeScore;
   const homeLeading = homeScore > awayScore;
 
+  const possTeamColor = possession === 'home' ? homeTeam.primaryColor : awayTeam.primaryColor;
+
+  // Detect scoring for pulse effect
+  const isScoringPlay = homeScoreAnim || awayScoreAnim;
+  const scoringTeamColor = homeScoreAnim ? homeTeam.primaryColor : awayScoreAnim ? awayTeam.primaryColor : null;
+
   return (
-    <div className="scorebug-glass border-b border-white/[0.06] z-50 flex-shrink-0">
+    <div
+      className="scorebug-glass border-b z-50 flex-shrink-0"
+      style={{
+        borderBottomWidth: '2px',
+        borderBottomColor: possTeamColor,
+        boxShadow: isScoringPlay && scoringTeamColor
+          ? `0 2px 12px ${scoringTeamColor}40, inset 0 -1px 8px ${scoringTeamColor}15`
+          : undefined,
+        transition: 'border-color 400ms ease-out, box-shadow 400ms ease-out',
+      }}
+    >
       {/* ── Desktop layout ── */}
       <div className="hidden sm:block max-w-5xl mx-auto">
         {/* Main scoreboard row */}

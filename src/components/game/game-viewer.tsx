@@ -17,6 +17,8 @@ import { MomentumMeter } from '@/components/game/momentum-meter';
 import { BoxScore } from '@/components/game/box-score';
 import { GameOverSummary } from '@/components/game/game-over-summary';
 import { BroadcastMoment } from '@/components/game/broadcast-moment';
+import { CrowdEnergy } from '@/components/game/crowd-energy';
+import { DriveTracker } from '@/components/game/drive-tracker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -216,6 +218,11 @@ export function GameViewer({ gameId }: GameViewerProps) {
           gameStatus={status === 'game_over' ? 'game_over' : gameState.isHalftime ? 'halftime' : 'live'}
           driveStartPosition={driveStartPosition}
           narrativeContext={currentEvent?.narrativeContext ?? null}
+          commentary={currentEvent ? {
+            playByPlay: currentEvent.commentary.playByPlay,
+            crowdReaction: currentEvent.commentary.crowdReaction,
+            excitement: currentEvent.commentary.excitement,
+          } : null}
         />
 
         {/* Possession strip — immediately visible who has the ball */}
@@ -229,6 +236,14 @@ export function GameViewer({ gameId }: GameViewerProps) {
           awayAbbrev={gameState.awayTeam.abbreviation}
         />
 
+        {/* Crowd energy visualizer */}
+        {currentEvent && (
+          <CrowdEnergy
+            excitement={currentEvent.commentary.excitement}
+            crowdReaction={currentEvent.commentary.crowdReaction}
+          />
+        )}
+
         {/* Between-play broadcast cards */}
         <BroadcastMoment
           currentEvent={currentEvent}
@@ -236,6 +251,19 @@ export function GameViewer({ gameId }: GameViewerProps) {
           gameState={gameState}
           boxScore={activeBoxScore}
         />
+
+        {/* Drive tracker — shows current drive progress */}
+        {!gameState.kickoff && !gameState.patAttempt && currentEvent && (
+          <DriveTracker
+            startPosition={driveStartPosition}
+            currentPosition={gameState.ballPosition}
+            plays={events.filter(e => e.driveNumber === currentEvent.driveNumber).length}
+            yards={gameState.ballPosition - driveStartPosition}
+            timeElapsed={0}
+            teamColor={(gameState.possession === 'home' ? gameState.homeTeam : gameState.awayTeam).primaryColor}
+            firstDownLine={firstDownLine}
+          />
+        )}
 
         {/* Latest play commentary — always visible on screen */}
         <LatestPlayBanner event={currentEvent} isLive={isLive} />

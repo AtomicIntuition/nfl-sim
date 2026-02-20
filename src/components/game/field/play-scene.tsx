@@ -1,35 +1,31 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import type { PlayResult, PlayType } from '@/lib/simulation/types';
+import type { PlayResult, PlayType, Formation, DefensivePersonnel } from '@/lib/simulation/types';
+import { OFFENSIVE_FORMATIONS, DEFENSIVE_FORMATIONS } from './formation-layouts';
+import type { FormationPosition } from './formation-layouts';
 
 interface PlaySceneProps {
-  /** Final ball position (field CSS %) */
   ballLeftPercent: number;
-  /** Ball position before this play (field CSS %) */
   prevBallLeftPercent: number;
-  /** Which team has the ball */
   possession: 'home' | 'away';
-  /** Offense team primary color */
   offenseColor: string;
-  /** Defense team primary color */
   defenseColor: string;
-  /** The last play result */
   lastPlay: PlayResult | null;
-  /** Unique key that increments on each new play */
   playKey: number;
-  /** Callback: true when animation is running, false when done */
   onAnimating: (animating: boolean) => void;
+  onPhaseChange?: (phase: Phase) => void;
 }
 
-// ── Timing ──────────────────────────────────────────────────
-const FORMATION_MS = 350;   // Dots appear
-const ANIMATE_MS = 1400;    // Ball moves
-const SETTLE_MS = 600;      // Outcome marker shows
-const FADE_MS = 350;        // Everything fades
-const TOTAL_MS = FORMATION_MS + ANIMATE_MS + SETTLE_MS + FADE_MS;
+// ── Enhanced Timing ──────────────────────────────────────────
+const PRE_SNAP_MS = 500;
+const SNAP_MS = 150;
+const DEVELOPMENT_MS = 1800;
+const RESULT_MS = 600;
+const POST_PLAY_MS = 400;
+const TOTAL_MS = PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS + RESULT_MS + POST_PLAY_MS;
 
-type Phase = 'idle' | 'formation' | 'animate' | 'settle' | 'fade';
+type Phase = 'idle' | 'pre_snap' | 'snap' | 'development' | 'result' | 'post_play';
 
 // ── Easing helpers ──────────────────────────────────────────
 function easeOutCubic(t: number): number {
@@ -50,6 +46,7 @@ export function PlayScene({
   lastPlay,
   playKey,
   onAnimating,
+  onPhaseChange,
 }: PlaySceneProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const prevKeyRef = useRef(playKey);
@@ -60,11 +57,27 @@ export function PlayScene({
   // Capture from/to at the moment we detect a new play
   const fromToRef = useRef({ from: prevBallLeftPercent, to: ballLeftPercent });
 
+  // Phase change callback
+  const onPhaseChangeRef = useRef(onPhaseChange);
+  onPhaseChangeRef.current = onPhaseChange;
+
+  const updatePhase = useCallback((newPhase: Phase) => {
+    setPhase(newPhase);
+    onPhaseChangeRef.current?.(newPhase);
+  }, []);
+
   // ── Formation dots ──────────────────────────────────────
   const formation = useMemo(() => {
     const losX = fromToRef.current.from;
     const playType = lastPlay?.type ?? null;
-    return getFormationDots(losX, possession, playType);
+    return getFormationDots(
+      losX,
+      possession,
+      playType,
+      lastPlay?.formation ?? null,
+      lastPlay?.defensiveCall?.personnel ?? null,
+      lastPlay,
+    );
   }, [possession, lastPlay, playKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Detect new play → start animation ───────────────────
@@ -91,27 +104,33 @@ export function PlayScene({
     const toX = ballLeftPercent;
 
     onAnimatingRef.current(true);
-    setPhase('formation');
+    updatePhase('pre_snap');
     setBallPos({ x: fromX, y: 50 });
     setAnimProgress(0);
 
     // Phase timers
     const t1 = setTimeout(() => {
-      setPhase('animate');
-      startRaf(fromX, toX, lastPlay);
-    }, FORMATION_MS);
+      updatePhase('snap');
+    }, PRE_SNAP_MS);
 
     const t2 = setTimeout(() => {
-      setPhase('settle');
+      updatePhase('development');
+      startRaf(fromX, toX, lastPlay);
+    }, PRE_SNAP_MS + SNAP_MS);
+
+    const t3 = setTimeout(() => {
+      updatePhase('result');
       cancelAnimationFrame(animFrameRef.current);
       setBallPos({ x: toX, y: 50 });
       setAnimProgress(1);
-    }, FORMATION_MS + ANIMATE_MS);
-
-    const t3 = setTimeout(() => setPhase('fade'), FORMATION_MS + ANIMATE_MS + SETTLE_MS);
+    }, PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS);
 
     const t4 = setTimeout(() => {
-      setPhase('idle');
+      updatePhase('post_play');
+    }, PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS + RESULT_MS);
+
+    const t5 = setTimeout(() => {
+      updatePhase('idle');
       onAnimatingRef.current(false);
     }, TOTAL_MS);
 
@@ -120,17 +139,18 @@ export function PlayScene({
       clearTimeout(t2);
       clearTimeout(t3);
       clearTimeout(t4);
+      clearTimeout(t5);
       cancelAnimationFrame(animFrameRef.current);
       onAnimatingRef.current(false);
     };
-  }, [playKey, lastPlay, prevBallLeftPercent, ballLeftPercent]);
+  }, [playKey, lastPlay, prevBallLeftPercent, ballLeftPercent, updatePhase]);
 
   // ── RAF loop ─────────────────────────────────────────────
   function startRaf(fromX: number, toX: number, play: PlayResult) {
     const startTime = performance.now();
 
     function tick(now: number) {
-      const t = Math.min((now - startTime) / ANIMATE_MS, 1);
+      const t = Math.min((now - startTime) / DEVELOPMENT_MS, 1);
       setAnimProgress(t);
       const pos = calculateBallPosition(play, fromX, toX, t, possession);
       setBallPos(pos);
@@ -149,19 +169,26 @@ export function PlayScene({
   const toX = fromToRef.current.to;
   const playType = lastPlay.type;
   const isSuccess = !isFailedPlay(lastPlay);
+  const offDir = possession === 'away' ? -1 : 1;
 
   const opacity =
-    phase === 'formation' ? 0.85 :
-    phase === 'animate' ? 1 :
-    phase === 'settle' ? 0.9 :
+    phase === 'pre_snap' ? 0.85 :
+    phase === 'snap' ? 0.9 :
+    phase === 'development' ? 1 :
+    phase === 'result' ? 0.9 :
     0;
+
+  // Determine if this is a pass play for route rendering
+  const isPassPlay = playType === 'pass_complete' || playType === 'pass_incomplete' ||
+    lastPlay.call?.startsWith('pass_') || lastPlay.call?.startsWith('play_action') ||
+    lastPlay.call === 'screen_pass' || lastPlay.call === 'pass_rpo';
 
   return (
     <div
       className="absolute inset-0 pointer-events-none z-10 overflow-hidden"
       style={{
         opacity,
-        transition: phase === 'fade' ? 'opacity 350ms ease-out' : 'opacity 200ms ease-in',
+        transition: phase === 'post_play' ? 'opacity 400ms ease-out' : 'opacity 200ms ease-in',
       }}
     >
       <svg
@@ -169,23 +196,78 @@ export function PlayScene({
         preserveAspectRatio="none"
         className="w-full h-full"
       >
-        {/* ─── Player formation dots ─── */}
-        {formation.map((dot, i) => (
-          <circle
-            key={i}
-            cx={clamp(dot.x, 1, 99)}
-            cy={clamp(dot.y, 3, 97)}
-            r={dot.role === 'qb' ? 1.4 : 1.1}
-            fill={dot.team === 'offense' ? offenseColor : defenseColor}
-            opacity={dot.team === 'offense' ? 0.8 : 0.5}
-            stroke={dot.team === 'offense' ? 'white' : 'rgba(255,255,255,0.2)'}
-            strokeWidth="0.3"
-            className="play-scene-dot"
+        {/* ─── Route lines for pass plays (behind dots) ─── */}
+        {isPassPlay && (phase === 'development' || phase === 'result') && (
+          <RouteLines
+            formation={formation}
+            fromX={fromX}
+            offDir={offDir}
+            offenseColor={offenseColor}
+            playCall={lastPlay.call}
+            progress={animProgress}
           />
-        ))}
+        )}
+
+        {/* ─── Player formation dots with labels ─── */}
+        {formation.map((dot, i) => {
+          const dotX = clamp(dot.x, 1, 99);
+          const dotY = clamp(dot.y, 3, 97);
+          const isQB = dot.role === 'QB';
+          const isKeyPlayer = dot.isKeyPlayer;
+          const dotR = isQB ? 2.5 : 2.0;
+          const isOffense = dot.team === 'offense';
+
+          // During snap/development, animate OL push and QB dropback
+          let animX = dotX;
+          let animY = dotY;
+          if ((phase === 'snap' || phase === 'development') && isOffense) {
+            if (dot.role === 'OL') {
+              animX = dotX - offDir * 1.0; // OL push forward
+            } else if (isQB && !lastPlay.call?.startsWith('run_') && phase === 'development') {
+              animX = dotX + offDir * 2 * Math.min(animProgress * 2, 1); // QB drops back
+            }
+          }
+
+          // During development, defenders converge toward ball
+          if (phase === 'development' && !isOffense) {
+            const convergeFactor = Math.min(animProgress * 0.3, 0.15);
+            animX = dotX + (ballPos.x - dotX) * convergeFactor;
+            animY = dotY + (ballPos.y - dotY) * convergeFactor * 0.5;
+          }
+
+          return (
+            <g key={i}>
+              {/* Player dot */}
+              <circle
+                cx={animX}
+                cy={animY}
+                r={dotR}
+                fill={isOffense ? offenseColor : defenseColor}
+                opacity={isOffense ? 0.85 : 0.55}
+                stroke={isOffense ? 'white' : 'rgba(255,255,255,0.3)'}
+                strokeWidth={isOffense ? '0.4' : '0.3'}
+                strokeDasharray={isOffense ? 'none' : '1 0.5'}
+                className="play-scene-dot"
+              />
+              {/* Position label */}
+              <text
+                x={animX}
+                y={animY - dotR - 0.8}
+                textAnchor="middle"
+                fill="white"
+                fontSize="2.2"
+                fontWeight="bold"
+                fontFamily="system-ui"
+                opacity={isKeyPlayer ? 0.9 : 0.6}
+              >
+                {isKeyPlayer && dot.number ? `#${dot.number}` : dot.role}
+              </text>
+            </g>
+          );
+        })}
 
         {/* ─── Play trajectory trail ─── */}
-        {(phase === 'animate' || phase === 'settle') && (
+        {(phase === 'development' || phase === 'result') && (
           <PlayTrajectory
             playType={playType}
             fromX={fromX}
@@ -196,8 +278,8 @@ export function PlayScene({
           />
         )}
 
-        {/* ─── Animated ball (brown ellipse following trajectory) ─── */}
-        {phase === 'animate' && (
+        {/* ─── Animated ball ─── */}
+        {phase === 'development' && (
           <g>
             {/* Glow */}
             <ellipse
@@ -231,21 +313,21 @@ export function PlayScene({
         )}
 
         {/* ─── Ball carrier dot (highlighted during run/scramble) ─── */}
-        {phase === 'animate' &&
+        {phase === 'development' &&
           (playType === 'run' || playType === 'scramble' || playType === 'two_point') && (
           <circle
             cx={clamp(ballPos.x, 2, 98)}
             cy={clamp(ballPos.y, 5, 95)}
-            r="1.6"
+            r="2.0"
             fill={offenseColor}
             stroke="white"
-            strokeWidth="0.4"
+            strokeWidth="0.5"
             opacity="0.9"
           />
         )}
 
         {/* ─── Outcome markers ─── */}
-        {(phase === 'settle' || phase === 'fade') && (
+        {(phase === 'result' || phase === 'post_play') && (
           <OutcomeMarker
             lastPlay={lastPlay}
             fromX={fromX}
@@ -259,6 +341,72 @@ export function PlayScene({
 }
 
 // ════════════════════════════════════════════════════════════
+// ROUTE LINES (for pass plays)
+// ════════════════════════════════════════════════════════════
+
+function RouteLines({
+  formation,
+  fromX,
+  offDir,
+  offenseColor,
+  playCall,
+  progress,
+}: {
+  formation: PlayerDot[];
+  fromX: number;
+  offDir: number;
+  offenseColor: string;
+  playCall: string;
+  progress: number;
+}) {
+  // Get WR/TE positions
+  const receivers = formation.filter(
+    d => d.team === 'offense' && (d.role === 'WR' || d.role === 'TE')
+  );
+
+  // Route depth based on play call
+  let routeDepth = 8;
+  if (playCall?.includes('quick')) routeDepth = 4;
+  else if (playCall?.includes('short') || playCall?.includes('screen')) routeDepth = 6;
+  else if (playCall?.includes('medium')) routeDepth = 12;
+  else if (playCall?.includes('deep')) routeDepth = 18;
+
+  return (
+    <g>
+      {receivers.map((wr, i) => {
+        const startX = clamp(wr.x, 1, 99);
+        const startY = clamp(wr.y, 3, 97);
+        // Route goes toward opponent end zone
+        const endX = startX - offDir * routeDepth * (0.8 + i * 0.15);
+        // Lateral break: alternate in/out
+        const lateralBreak = (i % 2 === 0 ? -1 : 1) * 5;
+        const midX = (startX + endX) / 2;
+        const midY = startY;
+        const endY = startY + lateralBreak;
+
+        const pathD = `M ${startX} ${startY} L ${midX} ${midY} L ${clamp(endX, 2, 98)} ${clamp(endY, 5, 95)}`;
+
+        // First receiver gets highlighted (targeted)
+        const isTargeted = i === 0;
+        const routeOpacity = isTargeted ? 0.5 * progress : 0.2 * progress;
+
+        return (
+          <path
+            key={i}
+            d={pathD}
+            stroke={offenseColor}
+            strokeWidth={isTargeted ? '1.0' : '0.6'}
+            fill="none"
+            strokeDasharray="2 2"
+            opacity={routeOpacity}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
 // FORMATION GENERATION
 // ════════════════════════════════════════════════════════════
 
@@ -267,180 +415,182 @@ interface PlayerDot {
   y: number;
   role: string;
   team: 'offense' | 'defense';
+  isKeyPlayer?: boolean;
+  number?: number;
 }
 
 function getFormationDots(
   losX: number,
   possession: 'home' | 'away',
   playType: PlayType | null,
+  formationType: Formation | null,
+  defensivePersonnel: DefensivePersonnel | null,
+  lastPlay: PlayResult | null,
 ): PlayerDot[] {
-  // Offense goes toward their scoring end zone
-  // 'away' goes right (positive x), so "behind LOS" is negative x offset
-  // 'home' goes left (negative x), so "behind LOS" is positive x offset
-  const offDir = possession === 'away' ? -1 : 1; // multiplier for "behind LOS"
+  const offDir = possession === 'away' ? -1 : 1;
 
-  if (playType === 'punt') {
-    return getPuntFormation(losX, offDir);
-  }
-  if (playType === 'kickoff') {
-    return getKickoffFormation(losX, offDir);
-  }
+  // Special teams formations (unchanged from original)
+  if (playType === 'punt') return getPuntFormation(losX, offDir);
+  if (playType === 'kickoff') return getKickoffFormation(losX, offDir);
   if (playType === 'field_goal' || playType === 'extra_point') {
     return getFieldGoalFormation(losX, offDir);
   }
 
-  return getStandardFormation(losX, offDir);
-}
+  // Use formation-accurate layouts when available
+  const offenseLayout = formationType
+    ? OFFENSIVE_FORMATIONS[formationType]
+    : OFFENSIVE_FORMATIONS.shotgun; // fallback
 
-function getStandardFormation(losX: number, offDir: number): PlayerDot[] {
-  const offense: PlayerDot[] = [
-    // Offensive Line (5 at the LOS)
-    { x: losX, y: 42, role: 'ol', team: 'offense' },
-    { x: losX, y: 46, role: 'ol', team: 'offense' },
-    { x: losX, y: 50, role: 'ol', team: 'offense' },
-    { x: losX, y: 54, role: 'ol', team: 'offense' },
-    { x: losX, y: 58, role: 'ol', team: 'offense' },
-    // QB (shotgun, 3 units back)
-    { x: losX + offDir * 3, y: 50, role: 'qb', team: 'offense' },
-    // RB (behind QB)
-    { x: losX + offDir * 5, y: 53, role: 'rb', team: 'offense' },
-    // TE (just outside OL)
-    { x: losX + offDir * 0.3, y: 62, role: 'te', team: 'offense' },
-    // Wide Receivers (split wide)
-    { x: losX + offDir * 0.5, y: 12, role: 'wr', team: 'offense' },
-    { x: losX + offDir * 0.5, y: 88, role: 'wr', team: 'offense' },
-    // Slot WR
-    { x: losX + offDir * 0.3, y: 28, role: 'slot', team: 'offense' },
-  ];
+  const defenseLayout = defensivePersonnel
+    ? DEFENSIVE_FORMATIONS[defensivePersonnel]
+    : DEFENSIVE_FORMATIONS.base_4_3; // fallback
 
-  const defense: PlayerDot[] = [
-    // Defensive Line (4)
-    { x: losX - offDir * 1.5, y: 44, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1.5, y: 48, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1.5, y: 52, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1.5, y: 56, role: 'dl', team: 'defense' },
-    // Linebackers (3)
-    { x: losX - offDir * 5, y: 38, role: 'lb', team: 'defense' },
-    { x: losX - offDir * 5, y: 50, role: 'lb', team: 'defense' },
-    { x: losX - offDir * 5, y: 62, role: 'lb', team: 'defense' },
-    // Cornerbacks (2 — covering WRs)
-    { x: losX - offDir * 7, y: 14, role: 'cb', team: 'defense' },
-    { x: losX - offDir * 7, y: 86, role: 'cb', team: 'defense' },
-    // Safeties (2)
-    { x: losX - offDir * 14, y: 42, role: 'fs', team: 'defense' },
-    { x: losX - offDir * 14, y: 58, role: 'ss', team: 'defense' },
-  ];
+  // Convert layout positions to field coordinates
+  const offense = convertLayout(offenseLayout, losX, offDir, 'offense', lastPlay);
+  const defense = convertLayout(defenseLayout, losX, offDir, 'defense', lastPlay);
 
   return [...offense, ...defense];
 }
 
+function convertLayout(
+  layout: FormationPosition[],
+  losX: number,
+  offDir: number,
+  team: 'offense' | 'defense',
+  lastPlay: PlayResult | null,
+): PlayerDot[] {
+  return layout.map((pos) => {
+    const x = losX + offDir * pos.x;
+    const y = pos.y;
+
+    // Mark key players from the play result
+    let isKeyPlayer = false;
+    let number: number | undefined;
+
+    if (lastPlay && team === 'offense') {
+      if (pos.role === 'QB' && lastPlay.passer) {
+        isKeyPlayer = true;
+        number = lastPlay.passer.number;
+      } else if ((pos.role === 'RB' || pos.role === 'FB') && lastPlay.rusher) {
+        isKeyPlayer = true;
+        number = lastPlay.rusher.number;
+      } else if (pos.role === 'WR' && lastPlay.receiver) {
+        // Only mark the first WR as the targeted receiver
+        if (!lastPlay.rusher || lastPlay.type === 'pass_complete' || lastPlay.type === 'pass_incomplete') {
+          isKeyPlayer = true;
+          number = lastPlay.receiver.number;
+        }
+      }
+    }
+
+    if (lastPlay && team === 'defense') {
+      if ((pos.role === 'LB' || pos.role === 'DL' || pos.role === 'CB' || pos.role === 'S') && lastPlay.defender) {
+        // Only mark one defensive player
+        if (pos.role === 'LB' || pos.role === 'CB') {
+          isKeyPlayer = true;
+          number = lastPlay.defender.number;
+        }
+      }
+    }
+
+    return {
+      x,
+      y,
+      role: pos.role,
+      team,
+      isKeyPlayer,
+      number,
+    };
+  });
+}
+
 function getPuntFormation(losX: number, offDir: number): PlayerDot[] {
   const offense: PlayerDot[] = [
-    // Punt line (spread across)
-    { x: losX, y: 35, role: 'ol', team: 'offense' },
-    { x: losX, y: 42, role: 'ol', team: 'offense' },
-    { x: losX, y: 48, role: 'ol', team: 'offense' },
-    { x: losX, y: 52, role: 'ol', team: 'offense' },
-    { x: losX, y: 58, role: 'ol', team: 'offense' },
-    { x: losX, y: 65, role: 'ol', team: 'offense' },
-    // Wings
-    { x: losX + offDir * 1, y: 30, role: 'wing', team: 'offense' },
-    { x: losX + offDir * 1, y: 70, role: 'wing', team: 'offense' },
-    // Gunners (split wide)
-    { x: losX + offDir * 0.5, y: 10, role: 'gunner', team: 'offense' },
-    { x: losX + offDir * 0.5, y: 90, role: 'gunner', team: 'offense' },
-    // Punter (15 yards back)
-    { x: losX + offDir * 12, y: 50, role: 'punter', team: 'offense' },
+    { x: losX, y: 35, role: 'OL', team: 'offense' },
+    { x: losX, y: 42, role: 'OL', team: 'offense' },
+    { x: losX, y: 48, role: 'OL', team: 'offense' },
+    { x: losX, y: 52, role: 'OL', team: 'offense' },
+    { x: losX, y: 58, role: 'OL', team: 'offense' },
+    { x: losX, y: 65, role: 'OL', team: 'offense' },
+    { x: losX + offDir * 1, y: 30, role: 'WG', team: 'offense' },
+    { x: losX + offDir * 1, y: 70, role: 'WG', team: 'offense' },
+    { x: losX + offDir * 0.5, y: 10, role: 'GN', team: 'offense' },
+    { x: losX + offDir * 0.5, y: 90, role: 'GN', team: 'offense' },
+    { x: losX + offDir * 12, y: 50, role: 'P', team: 'offense' },
   ];
-
   const defense: PlayerDot[] = [
-    // Punt rush/return
-    { x: losX - offDir * 1, y: 38, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1, y: 45, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1, y: 55, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1, y: 62, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 5, y: 35, role: 'lb', team: 'defense' },
-    { x: losX - offDir * 5, y: 50, role: 'lb', team: 'defense' },
-    { x: losX - offDir * 5, y: 65, role: 'lb', team: 'defense' },
-    { x: losX - offDir * 12, y: 30, role: 'cb', team: 'defense' },
-    { x: losX - offDir * 12, y: 70, role: 'cb', team: 'defense' },
-    { x: losX - offDir * 20, y: 50, role: 'returner', team: 'defense' },
-    { x: losX - offDir * 18, y: 40, role: 'ss', team: 'defense' },
+    { x: losX - offDir * 1, y: 38, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 1, y: 45, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 1, y: 55, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 1, y: 62, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 5, y: 35, role: 'LB', team: 'defense' },
+    { x: losX - offDir * 5, y: 50, role: 'LB', team: 'defense' },
+    { x: losX - offDir * 5, y: 65, role: 'LB', team: 'defense' },
+    { x: losX - offDir * 12, y: 30, role: 'CB', team: 'defense' },
+    { x: losX - offDir * 12, y: 70, role: 'CB', team: 'defense' },
+    { x: losX - offDir * 20, y: 50, role: 'PR', team: 'defense' },
+    { x: losX - offDir * 18, y: 40, role: 'S', team: 'defense' },
   ];
-
   return [...offense, ...defense];
 }
 
 function getKickoffFormation(losX: number, offDir: number): PlayerDot[] {
   const offense: PlayerDot[] = [
-    // Kicker
-    { x: losX + offDir * 2, y: 50, role: 'kicker', team: 'offense' },
-    // Coverage team (spread across)
-    { x: losX, y: 10, role: 'cover', team: 'offense' },
-    { x: losX, y: 20, role: 'cover', team: 'offense' },
-    { x: losX, y: 30, role: 'cover', team: 'offense' },
-    { x: losX, y: 38, role: 'cover', team: 'offense' },
-    { x: losX, y: 45, role: 'cover', team: 'offense' },
-    { x: losX, y: 55, role: 'cover', team: 'offense' },
-    { x: losX, y: 62, role: 'cover', team: 'offense' },
-    { x: losX, y: 70, role: 'cover', team: 'offense' },
-    { x: losX, y: 80, role: 'cover', team: 'offense' },
-    { x: losX, y: 90, role: 'cover', team: 'offense' },
+    { x: losX + offDir * 2, y: 50, role: 'K', team: 'offense' },
+    { x: losX, y: 10, role: 'CV', team: 'offense' },
+    { x: losX, y: 20, role: 'CV', team: 'offense' },
+    { x: losX, y: 30, role: 'CV', team: 'offense' },
+    { x: losX, y: 38, role: 'CV', team: 'offense' },
+    { x: losX, y: 45, role: 'CV', team: 'offense' },
+    { x: losX, y: 55, role: 'CV', team: 'offense' },
+    { x: losX, y: 62, role: 'CV', team: 'offense' },
+    { x: losX, y: 70, role: 'CV', team: 'offense' },
+    { x: losX, y: 80, role: 'CV', team: 'offense' },
+    { x: losX, y: 90, role: 'CV', team: 'offense' },
   ];
-
   const defense: PlayerDot[] = [
-    // Return team — blockers in a wedge
-    { x: losX - offDir * 15, y: 35, role: 'block', team: 'defense' },
-    { x: losX - offDir * 15, y: 45, role: 'block', team: 'defense' },
-    { x: losX - offDir * 15, y: 55, role: 'block', team: 'defense' },
-    { x: losX - offDir * 15, y: 65, role: 'block', team: 'defense' },
-    { x: losX - offDir * 18, y: 30, role: 'block', team: 'defense' },
-    { x: losX - offDir * 18, y: 42, role: 'block', team: 'defense' },
-    { x: losX - offDir * 18, y: 58, role: 'block', team: 'defense' },
-    { x: losX - offDir * 18, y: 70, role: 'block', team: 'defense' },
-    { x: losX - offDir * 22, y: 40, role: 'block', team: 'defense' },
-    { x: losX - offDir * 22, y: 60, role: 'block', team: 'defense' },
-    // Returner (deep)
-    { x: losX - offDir * 30, y: 50, role: 'returner', team: 'defense' },
+    { x: losX - offDir * 15, y: 35, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 15, y: 45, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 15, y: 55, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 15, y: 65, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 18, y: 30, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 18, y: 42, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 18, y: 58, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 18, y: 70, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 22, y: 40, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 22, y: 60, role: 'BK', team: 'defense' },
+    { x: losX - offDir * 30, y: 50, role: 'KR', team: 'defense' },
   ];
-
   return [...offense, ...defense];
 }
 
 function getFieldGoalFormation(losX: number, offDir: number): PlayerDot[] {
   const offense: PlayerDot[] = [
-    // FG line (tight)
-    { x: losX, y: 40, role: 'ol', team: 'offense' },
-    { x: losX, y: 44, role: 'ol', team: 'offense' },
-    { x: losX, y: 48, role: 'ol', team: 'offense' },
-    { x: losX, y: 50, role: 'ol', team: 'offense' },
-    { x: losX, y: 52, role: 'ol', team: 'offense' },
-    { x: losX, y: 56, role: 'ol', team: 'offense' },
-    { x: losX, y: 60, role: 'ol', team: 'offense' },
-    // Wings
-    { x: losX + offDir * 0.5, y: 36, role: 'wing', team: 'offense' },
-    { x: losX + offDir * 0.5, y: 64, role: 'wing', team: 'offense' },
-    // Holder (7 yards back)
-    { x: losX + offDir * 6, y: 50, role: 'holder', team: 'offense' },
-    // Kicker (behind holder)
-    { x: losX + offDir * 9, y: 50, role: 'kicker', team: 'offense' },
+    { x: losX, y: 40, role: 'OL', team: 'offense' },
+    { x: losX, y: 44, role: 'OL', team: 'offense' },
+    { x: losX, y: 48, role: 'OL', team: 'offense' },
+    { x: losX, y: 50, role: 'OL', team: 'offense' },
+    { x: losX, y: 52, role: 'OL', team: 'offense' },
+    { x: losX, y: 56, role: 'OL', team: 'offense' },
+    { x: losX, y: 60, role: 'OL', team: 'offense' },
+    { x: losX + offDir * 0.5, y: 36, role: 'WG', team: 'offense' },
+    { x: losX + offDir * 0.5, y: 64, role: 'WG', team: 'offense' },
+    { x: losX + offDir * 6, y: 50, role: 'H', team: 'offense' },
+    { x: losX + offDir * 9, y: 50, role: 'K', team: 'offense' },
   ];
-
   const defense: PlayerDot[] = [
-    // FG rush
-    { x: losX - offDir * 1, y: 40, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1, y: 44, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1, y: 48, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1, y: 52, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1, y: 56, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 1, y: 60, role: 'dl', team: 'defense' },
-    { x: losX - offDir * 3, y: 35, role: 'lb', team: 'defense' },
-    { x: losX - offDir * 3, y: 50, role: 'lb', team: 'defense' },
-    { x: losX - offDir * 3, y: 65, role: 'lb', team: 'defense' },
-    { x: losX - offDir * 8, y: 30, role: 'cb', team: 'defense' },
-    { x: losX - offDir * 8, y: 70, role: 'cb', team: 'defense' },
+    { x: losX - offDir * 1, y: 40, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 1, y: 44, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 1, y: 48, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 1, y: 52, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 1, y: 56, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 1, y: 60, role: 'DL', team: 'defense' },
+    { x: losX - offDir * 3, y: 35, role: 'LB', team: 'defense' },
+    { x: losX - offDir * 3, y: 50, role: 'LB', team: 'defense' },
+    { x: losX - offDir * 3, y: 65, role: 'LB', team: 'defense' },
+    { x: losX - offDir * 8, y: 30, role: 'CB', team: 'defense' },
+    { x: losX - offDir * 8, y: 70, role: 'CB', team: 'defense' },
   ];
-
   return [...offense, ...defense];
 }
 
@@ -461,90 +611,87 @@ function calculateBallPosition(
     case 'run':
     case 'scramble':
     case 'two_point': {
-      // Forward movement with lateral weaving
       const eased = easeOutCubic(t);
       const x = fromX + (toX - fromX) * eased;
       const weaveAmt = play.type === 'scramble' ? 5 : 3;
-      const weave = Math.sin(t * Math.PI * 3) * weaveAmt * (1 - t); // weave dampens
+      const weave = Math.sin(t * Math.PI * 3) * weaveAmt * (1 - t);
       return { x, y: 50 + weave };
     }
 
     case 'pass_complete': {
-      // Phase 1 (0→0.2): QB drops back
-      // Phase 2 (0.2→0.85): Ball arcs to receiver
-      // Phase 3 (0.85→1): Receiver runs after catch
-      if (t < 0.2) {
-        const dropT = easeOutCubic(t / 0.2);
+      if (t < 0.15) {
+        const dropT = easeOutCubic(t / 0.15);
         const qbX = fromX + offDir * 3 * dropT;
         return { x: qbX, y: 50 };
+      } else if (t < 0.4) {
+        // Ball in QB's hands, surveying
+        const qbX = fromX + offDir * 3;
+        const sway = Math.sin((t - 0.15) * 12) * 0.5;
+        return { x: qbX + sway, y: 50 };
       } else if (t < 0.85) {
-        const throwT = easeInOutQuad((t - 0.2) / 0.65);
+        const throwT = easeInOutQuad((t - 0.4) / 0.45);
         const qbX = fromX + offDir * 3;
         const dist = Math.abs(toX - qbX);
         const arcHeight = Math.min(dist * 0.5, 25);
         const x = qbX + (toX - qbX) * throwT;
         const y = 50 - arcHeight * Math.sin(throwT * Math.PI);
-        // Lateral drift for sideline throws
         const lateral =
           play.yardsGained > 15
             ? Math.sin(throwT * Math.PI * 0.5) * 8
             : Math.sin(throwT * Math.PI * 0.5) * 3;
         return { x, y: y + lateral };
       } else {
-        // Ball at receiver, slight YAC movement
         const yacT = easeOutCubic((t - 0.85) / 0.15);
-        const yacExtra = (toX - fromX) * 0.05 * yacT; // tiny extra yards
-        return { x: toX + yacExtra * 0, y: 50 }; // settle to center
+        const yacExtra = (toX - fromX) * 0.05 * yacT;
+        return { x: toX + yacExtra * 0, y: 50 };
       }
     }
 
     case 'pass_incomplete': {
-      // Phase 1 (0→0.2): QB drops back
-      // Phase 2 (0.2→0.7): Ball arcs toward target
-      // Phase 3 (0.7→1): Ball falls incomplete
-      if (t < 0.2) {
-        const dropT = easeOutCubic(t / 0.2);
+      if (t < 0.15) {
+        const dropT = easeOutCubic(t / 0.15);
         return { x: fromX + offDir * 3 * dropT, y: 50 };
-      } else if (t < 0.7) {
-        const throwT = (t - 0.2) / 0.5;
+      } else if (t < 0.4) {
         const qbX = fromX + offDir * 3;
-        // Aim toward where the pass was going (use a projected target)
-        const targetX = fromX - offDir * 12; // ~12 yards downfield
+        return { x: qbX, y: 50 };
+      } else if (t < 0.7) {
+        const throwT = (t - 0.4) / 0.3;
+        const qbX = fromX + offDir * 3;
+        const targetX = fromX - offDir * 12;
         const dist = Math.abs(targetX - qbX);
         const arcHeight = Math.min(dist * 0.4, 18);
         const x = qbX + (targetX - qbX) * easeInOutQuad(throwT);
         const y = 50 - arcHeight * Math.sin(throwT * Math.PI);
         return { x, y };
       } else {
-        // Ball drops to the ground
         const dropT = (t - 0.7) / 0.3;
         const qbX = fromX + offDir * 3;
         const targetX = fromX - offDir * 12;
-        const endX = qbX + (targetX - qbX) * 0.9; // almost at target
-        const dropY = 50 + dropT * 15; // falls below centerline
+        const endX = qbX + (targetX - qbX) * 0.9;
+        const dropY = 50 + dropT * 15;
         return { x: endX + (targetX - endX) * dropT * 0.3, y: dropY };
       }
     }
 
     case 'sack': {
-      // Phase 1 (0→0.3): QB drops back
-      // Phase 2 (0.3→0.7): Defender closes
-      // Phase 3 (0.7→1): Impact, ball jolts
-      if (t < 0.3) {
-        const dropT = easeOutCubic(t / 0.3);
+      if (t < 0.2) {
+        const dropT = easeOutCubic(t / 0.2);
         return { x: fromX + offDir * 2 * dropT, y: 50 };
+      } else if (t < 0.5) {
+        // QB in pocket, defender closing
+        const qbX = fromX + offDir * 2;
+        const sway = Math.sin((t - 0.2) * 15) * 0.8;
+        return { x: qbX + sway, y: 50 };
       } else {
-        const sackT = easeOutCubic((t - 0.3) / 0.7);
+        const sackT = easeOutCubic((t - 0.5) / 0.5);
         const qbX = fromX + offDir * 2;
         const x = qbX + (toX - qbX) * sackT;
-        // Jolt effect at impact
-        const jolt = t > 0.65 ? Math.sin((t - 0.65) * 30) * 1.5 * (1 - t) : 0;
+        const jolt = t > 0.75 ? Math.sin((t - 0.75) * 30) * 1.5 * (1 - t) : 0;
         return { x: x + jolt, y: 50 + jolt * 0.5 };
       }
     }
 
     case 'punt': {
-      // High arcing kick
       const eased = easeInOutQuad(t);
       const x = fromX + (toX - fromX) * eased;
       const dist = Math.abs(toX - fromX);
@@ -554,7 +701,6 @@ function calculateBallPosition(
     }
 
     case 'kickoff': {
-      // Very high arc
       const eased = easeInOutQuad(t);
       const x = fromX + (toX - fromX) * eased;
       const dist = Math.abs(toX - fromX);
@@ -565,7 +711,6 @@ function calculateBallPosition(
 
     case 'field_goal':
     case 'extra_point': {
-      // Arc toward goal posts
       const goalPostX = possession === 'away' ? 91.66 : 8.33;
       const eased = easeInOutQuad(t);
       const x = fromX + (goalPostX - fromX) * eased;
@@ -610,7 +755,6 @@ function PlayTrajectory({
     case 'run':
     case 'scramble':
     case 'two_point': {
-      // Green trail showing run path
       const currentX = fromX + (toX - fromX) * Math.min(progress, 1);
       if (Math.abs(currentX - fromX) < 0.3) return null;
       const color = playType === 'scramble' ? '#4ade80' : '#22c55e';
@@ -624,7 +768,6 @@ function PlayTrajectory({
             strokeLinecap="round"
             opacity="0.6"
           />
-          {/* Arrow head */}
           {progress > 0.3 && (
             <polygon
               points={
@@ -644,16 +787,13 @@ function PlayTrajectory({
     case 'pass_incomplete': {
       const color = playType === 'pass_complete' ? '#3b82f6' : '#ef4444';
       const qbX = fromX + offDir * 3;
-      const targetX = playType === 'pass_complete'
-        ? toX
-        : fromX - offDir * 12;
+      const targetX = playType === 'pass_complete' ? toX : fromX - offDir * 12;
       const dist = Math.abs(targetX - qbX);
       const arcHeight = Math.min(dist * 0.5, 25);
       const midX = (qbX + targetX) / 2;
 
       return (
         <g>
-          {/* Dashed arc trail */}
           <path
             d={`M ${qbX} 50 Q ${midX} ${50 - arcHeight} ${targetX} 50`}
             stroke={color}
@@ -663,9 +803,10 @@ function PlayTrajectory({
             strokeLinecap="round"
             opacity="0.5"
           />
-          {/* Completion dot or incomplete X at target */}
           {progress > 0.7 && playType === 'pass_complete' && (
-            <circle cx={toX} cy={50} r="1.5" fill={color} opacity="0.7" />
+            <circle cx={toX} cy={50} r="2" fill={color} opacity="0.7">
+              <animate attributeName="r" values="1.5;2.5;2" dur="0.4s" fill="freeze" />
+            </circle>
           )}
         </g>
       );
@@ -723,7 +864,6 @@ function PlayTrajectory({
             strokeLinecap="round"
             opacity="0.5"
           />
-          {/* Goal posts */}
           <line
             x1={goalPostX} y1={25} x2={goalPostX} y2={75}
             stroke="#fbbf24" strokeWidth="0.6" opacity="0.3"
@@ -767,7 +907,6 @@ function OutcomeMarker({
       const dropX = fromX - offDir * 10;
       return (
         <g className="outcome-marker-anim">
-          {/* Red X */}
           <line
             x1={dropX - 3} y1={47}
             x2={dropX + 3} y2={53}
@@ -778,7 +917,6 @@ function OutcomeMarker({
             x2={dropX - 3} y2={53}
             stroke="#ef4444" strokeWidth="2" strokeLinecap="round"
           />
-          {/* Label */}
           <text
             x={dropX} y={40}
             textAnchor="middle"
@@ -799,17 +937,11 @@ function OutcomeMarker({
       if (lastPlay.scoring) {
         return (
           <g className="outcome-marker-anim">
-            <circle
-              cx={goalPostX} cy={50} r={4}
-              fill="#22c55e" opacity="0.3"
-            />
+            <circle cx={goalPostX} cy={50} r={4} fill="#22c55e" opacity="0.3" />
             <text
               x={goalPostX} y={18}
-              textAnchor="middle"
-              fill="#22c55e"
-              fontSize="4"
-              fontWeight="bold"
-              fontFamily="system-ui"
+              textAnchor="middle" fill="#22c55e"
+              fontSize="4" fontWeight="bold" fontFamily="system-ui"
             >
               GOOD!
             </text>
@@ -818,17 +950,11 @@ function OutcomeMarker({
       } else {
         return (
           <g className="outcome-marker-anim">
-            <circle
-              cx={goalPostX} cy={50} r={3}
-              fill="#ef4444" opacity="0.3"
-            />
+            <circle cx={goalPostX} cy={50} r={3} fill="#ef4444" opacity="0.3" />
             <text
               x={goalPostX} y={18}
-              textAnchor="middle"
-              fill="#ef4444"
-              fontSize="4"
-              fontWeight="bold"
-              fontFamily="system-ui"
+              textAnchor="middle" fill="#ef4444"
+              fontSize="4" fontWeight="bold" fontFamily="system-ui"
             >
               NO GOOD
             </text>
@@ -840,7 +966,6 @@ function OutcomeMarker({
     case 'sack': {
       return (
         <g className="outcome-marker-anim">
-          {/* Impact burst */}
           {Array.from({ length: 8 }, (_, i) => {
             const angle = (i * 45 * Math.PI) / 180;
             return (
@@ -850,20 +975,14 @@ function OutcomeMarker({
                 y1={50 + Math.sin(angle) * 1.5}
                 x2={toX + Math.cos(angle) * 4.5}
                 y2={50 + Math.sin(angle) * 4.5}
-                stroke="#ef4444"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                opacity="0.7"
+                stroke="#ef4444" strokeWidth="1.2" strokeLinecap="round" opacity="0.7"
               />
             );
           })}
           <text
             x={toX} y={40}
-            textAnchor="middle"
-            fill="#ef4444"
-            fontSize="3.5"
-            fontWeight="bold"
-            fontFamily="system-ui"
+            textAnchor="middle" fill="#ef4444"
+            fontSize="3.5" fontWeight="bold" fontFamily="system-ui"
           >
             SACK
           </text>
@@ -872,17 +991,13 @@ function OutcomeMarker({
     }
 
     default: {
-      // Big play yardage callouts
       if (lastPlay.isTouchdown) {
         return (
           <g className="outcome-marker-anim">
             <text
               x={toX} y={38}
-              textAnchor="middle"
-              fill="#22c55e"
-              fontSize="5"
-              fontWeight="bold"
-              fontFamily="system-ui"
+              textAnchor="middle" fill="#22c55e"
+              fontSize="5" fontWeight="bold" fontFamily="system-ui"
             >
               TOUCHDOWN!
             </text>
@@ -899,11 +1014,8 @@ function OutcomeMarker({
           <g className="outcome-marker-anim">
             <text
               x={toX} y={38}
-              textAnchor="middle"
-              fill="#f59e0b"
-              fontSize="4"
-              fontWeight="bold"
-              fontFamily="system-ui"
+              textAnchor="middle" fill="#f59e0b"
+              fontSize="4" fontWeight="bold" fontFamily="system-ui"
             >
               {label}
             </text>
@@ -916,11 +1028,8 @@ function OutcomeMarker({
           <g className="outcome-marker-anim">
             <text
               x={toX} y={38}
-              textAnchor="middle"
-              fill="#ef4444"
-              fontSize="4"
-              fontWeight="bold"
-              fontFamily="system-ui"
+              textAnchor="middle" fill="#ef4444"
+              fontSize="4" fontWeight="bold" fontFamily="system-ui"
             >
               SAFETY!
             </text>
@@ -928,7 +1037,6 @@ function OutcomeMarker({
         );
       }
 
-      // Big gain callout
       if (
         (lastPlay.type === 'run' || lastPlay.type === 'scramble') &&
         lastPlay.yardsGained > 15
@@ -937,12 +1045,8 @@ function OutcomeMarker({
           <g className="outcome-marker-anim">
             <text
               x={toX} y={40}
-              textAnchor="middle"
-              fill="#22c55e"
-              fontSize="3.5"
-              fontWeight="bold"
-              fontFamily="system-ui"
-              opacity="0.8"
+              textAnchor="middle" fill="#22c55e"
+              fontSize="3.5" fontWeight="bold" fontFamily="system-ui" opacity="0.8"
             >
               +{lastPlay.yardsGained} YDS
             </text>
@@ -955,12 +1059,8 @@ function OutcomeMarker({
           <g className="outcome-marker-anim">
             <text
               x={toX} y={40}
-              textAnchor="middle"
-              fill="#3b82f6"
-              fontSize="3.5"
-              fontWeight="bold"
-              fontFamily="system-ui"
-              opacity="0.8"
+              textAnchor="middle" fill="#3b82f6"
+              fontSize="3.5" fontWeight="bold" fontFamily="system-ui" opacity="0.8"
             >
               +{lastPlay.yardsGained} YDS
             </text>
