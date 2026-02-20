@@ -195,7 +195,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
   const isCatchup = status === 'catchup';
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden">
+    <div className="min-h-dvh flex flex-col lg:h-dvh lg:overflow-hidden">
       {/* ── Top: Nav + ScoreBug (full width) ── */}
       <div className="flex-shrink-0">
         <GameNav />
@@ -222,12 +222,12 @@ export function GameViewer({ gameId }: GameViewerProps) {
         )}
       </div>
 
-      {/* ── Main content: responsive grid ── */}
+      {/* ── Main content: scrollable on mobile, locked grid on desktop ── */}
       <div className="flex-1 min-h-0 lg:grid lg:grid-cols-5">
         {/* ═══ Left: Field + info strips (3/5 on desktop, full on mobile) ═══ */}
-        <div className="flex flex-col lg:col-span-3 min-h-0">
-          {/* Field */}
-          <div className="flex-1 min-h-0 relative">
+        <div className="flex flex-col lg:col-span-3 lg:min-h-0">
+          {/* Field — fixed aspect on mobile so it's always visible */}
+          <div className="h-[240px] sm:h-[300px] lg:flex-1 lg:h-auto lg:min-h-0 relative">
             <JumbotronOverlay />
             <FieldVisual
               ballPosition={gameState.ballPosition}
@@ -297,7 +297,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
         </div>
 
         {/* ═══ Right: Sidebar (2/5 on desktop, below field on mobile) ═══ */}
-        <div className="lg:col-span-2 flex flex-col min-h-0 border-l border-white/[0.06]">
+        <div className="lg:col-span-2 flex flex-col lg:min-h-0 border-l border-white/[0.06]">
           {/* Live commentary */}
           <div className="flex-shrink-0">
             <LiveCommentary event={currentEvent} />
@@ -329,8 +329,8 @@ export function GameViewer({ gameId }: GameViewerProps) {
             />
           </div>
 
-          {/* Play Feed — fills remaining space with scroll */}
-          <div className="flex-1 min-h-0 overflow-y-auto border-t border-white/[0.06]">
+          {/* Play Feed — scrollable on both mobile and desktop */}
+          <div className="min-h-[300px] lg:flex-1 lg:min-h-0 overflow-y-auto border-t border-white/[0.06]">
             <PlayFeed events={events} isLive={isLive} />
           </div>
         </div>
