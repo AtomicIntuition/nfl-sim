@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { NarrativeSnapshot } from '@/lib/simulation/types';
 import { useGameStream } from '@/hooks/use-game-stream';
 import { useMomentum } from '@/hooks/use-momentum';
@@ -24,6 +25,7 @@ interface GameViewerProps {
 }
 
 export function GameViewer({ gameId }: GameViewerProps) {
+  const router = useRouter();
   const {
     events,
     currentEvent,
@@ -35,6 +37,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
     error,
     intermissionMessage,
     intermissionCountdown,
+    nextGameId,
     reconnect,
   } = useGameStream(gameId);
 
@@ -122,25 +125,11 @@ export function GameViewer({ gameId }: GameViewerProps) {
 
   if (status === 'intermission') {
     return (
-      <div className="min-h-dvh flex flex-col">
-        <GameNav />
-        <div className="flex-1 flex items-center justify-center px-4">
-          <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center space-y-4">
-            <Badge variant="default" size="md">
-              INTERMISSION
-            </Badge>
-            {intermissionMessage && (
-              <p className="text-sm text-text-secondary">{intermissionMessage}</p>
-            )}
-            {intermissionCountdown > 0 && (
-              <div className="font-mono text-3xl font-black text-gold tabular-nums">
-                {Math.floor(intermissionCountdown / 60)}:
-                {(intermissionCountdown % 60).toString().padStart(2, '0')}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <IntermissionScreen
+        message={intermissionMessage}
+        initialCountdown={intermissionCountdown}
+        nextGameId={nextGameId}
+      />
     );
   }
 
@@ -363,8 +352,12 @@ function NextGamePreview() {
 
         if (data.nextGame) {
           setNextGame(data.nextGame);
-          // Countdown: 15 minutes from now (intermission duration)
-          setCountdownTarget(15 * 60);
+          // Use actual intermission timing from API if available
+          if (data.intermission?.remainingSeconds) {
+            setCountdownTarget(data.intermission.remainingSeconds);
+          } else {
+            setCountdownTarget(15 * 60);
+          }
         }
       } catch {
         // Silently fail
@@ -555,6 +548,90 @@ function NarrativeBar({
           {tag}
         </span>
       ))}
+    </div>
+  );
+}
+
+// ── Intermission Screen ──────────────────────────────────────
+
+function IntermissionScreen({
+  message,
+  initialCountdown,
+  nextGameId,
+}: {
+  message: string | null;
+  initialCountdown: number;
+  nextGameId: string | null;
+}) {
+  const router = useRouter();
+  const [countdown, setCountdown] = useState(initialCountdown);
+
+  // Live countdown timer that decrements every second
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-navigate to next game when countdown hits 0
+  useEffect(() => {
+    if (countdown === 0 && nextGameId) {
+      const timer = setTimeout(() => {
+        router.push(`/game/${nextGameId}`);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown, nextGameId, router]);
+
+  return (
+    <div className="min-h-dvh flex flex-col">
+      <GameNav />
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center space-y-4">
+          <Badge variant="default" size="md">
+            INTERMISSION
+          </Badge>
+          {message && (
+            <p className="text-sm text-text-secondary">{message}</p>
+          )}
+          {countdown > 0 ? (
+            <div className="font-mono text-3xl font-black text-gold tabular-nums">
+              {Math.floor(countdown / 60)}:
+              {(countdown % 60).toString().padStart(2, '0')}
+            </div>
+          ) : nextGameId ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-gold" />
+                </span>
+                <span className="text-sm font-bold text-gold">Starting soon...</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted">Next week kicks off soon.</p>
+          )}
+          {nextGameId && (
+            <Link
+              href={`/game/${nextGameId}`}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-gold text-midnight font-bold text-sm rounded-full hover:bg-gold-bright transition-colors shadow-lg shadow-gold/20"
+            >
+              GO TO NEXT GAME
+            </Link>
+          )}
+          {!nextGameId && (
+            <Link
+              href="/schedule"
+              className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors border border-border rounded-full"
+            >
+              View Standings {'\u2192'}
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

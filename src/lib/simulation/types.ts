@@ -580,6 +580,8 @@ export interface ScheduledGame {
   status: GameStatus;
   /** Whether this game is the featured broadcast game for the week. */
   isFeatured: boolean;
+  /** Estimated time when this game will start broadcasting. */
+  scheduledAt: Date | null;
   /** When the SSE broadcast began streaming events. */
   broadcastStartedAt: Date | null;
   /** When the game simulation and broadcast finished. */
@@ -761,6 +763,10 @@ export interface StreamWeekRecapMessage {
   standingsUpdates: string[];
 }
 
+export interface StreamReconnectMessage {
+  type: 'reconnect';
+}
+
 export interface StreamErrorMessage {
   type: 'error';
   message: string;
@@ -772,6 +778,7 @@ export type StreamMessage =
   | StreamPlayMessage
   | StreamGameOverMessage
   | StreamIntermissionMessage
+  | StreamReconnectMessage
   | StreamWeekRecapMessage
   | StreamErrorMessage;
 

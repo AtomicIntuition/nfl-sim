@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { games, gameEvents } from '@/lib/db/schema';
-import { eq, asc } from 'drizzle-orm';
+import { games, gameEvents, seasons, teams } from '@/lib/db/schema';
+import { eq, asc, and, desc } from 'drizzle-orm';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -148,9 +148,20 @@ export async function GET(
         }
       }, 15_000);
 
-      // Clean up heartbeat when client disconnects
+      // Safety close timer: gracefully tell client to reconnect before Vercel's 300s hard limit
+      const SAFETY_CLOSE_MS = 270_000; // 270s = 30s before 300s timeout
+      const safetyTimer = setTimeout(() => {
+        if (!abortSignal.aborted) {
+          send({ type: 'reconnect' });
+          clearInterval(heartbeatInterval);
+          try { controller.close(); } catch { /* already closed */ }
+        }
+      }, SAFETY_CLOSE_MS);
+
+      // Clean up all timers when client disconnects
       abortSignal.addEventListener('abort', () => {
         clearInterval(heartbeatInterval);
+        clearTimeout(safetyTimer);
       }, { once: true });
 
       try {
@@ -249,12 +260,71 @@ export async function GET(
             },
             mvp: (game.boxScore as Record<string, unknown>)?.mvp ?? null
           });
+
+          // ---- Step 4: Send intermission message with next game info ----
+          if (!abortSignal.aborted) {
+            await sleep(2000);
+
+            try {
+              // Find the current season
+              const seasonRows = await db
+                .select()
+                .from(seasons)
+                .orderBy(desc(seasons.seasonNumber))
+                .limit(1);
+
+              if (seasonRows.length > 0) {
+                const season = seasonRows[0];
+                // Find next scheduled game in the current week
+                const nextGames = await db
+                  .select()
+                  .from(games)
+                  .where(
+                    and(
+                      eq(games.seasonId, season.id),
+                      eq(games.week, season.currentWeek),
+                      eq(games.status, 'scheduled')
+                    )
+                  )
+                  .limit(1);
+
+                if (nextGames.length > 0) {
+                  const nextGame = nextGames[0];
+                  // Hydrate team abbreviations for the message
+                  const [homeTeamRows, awayTeamRows] = await Promise.all([
+                    db.select().from(teams).where(eq(teams.id, nextGame.homeTeamId)).limit(1),
+                    db.select().from(teams).where(eq(teams.id, nextGame.awayTeamId)).limit(1),
+                  ]);
+                  const homeAbbr = homeTeamRows[0]?.abbreviation ?? '???';
+                  const awayAbbr = awayTeamRows[0]?.abbreviation ?? '???';
+
+                  send({
+                    type: 'intermission',
+                    message: `Up next: ${awayAbbr} @ ${homeAbbr}`,
+                    nextGameId: nextGame.id,
+                    countdown: 900, // 15 min intermission
+                  });
+                } else {
+                  send({
+                    type: 'intermission',
+                    message: 'Week complete',
+                    nextGameId: null,
+                    countdown: 0,
+                  });
+                }
+              }
+            } catch {
+              // Non-critical — intermission info is optional
+            }
+          }
         }
 
         clearInterval(heartbeatInterval);
+        clearTimeout(safetyTimer);
         controller.close();
       } catch (error) {
         clearInterval(heartbeatInterval);
+        clearTimeout(safetyTimer);
         console.error('SSE stream error:', error);
         try {
           send({ type: 'error', message: 'Stream error occurred' });

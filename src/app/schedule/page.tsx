@@ -189,6 +189,7 @@ export default async function SchedulePage({
     awayScore: g.awayScore,
     status: g.status as ScheduledGame['status'],
     isFeatured: g.isFeatured ?? false,
+    scheduledAt: g.scheduledAt,
     broadcastStartedAt: g.broadcastStartedAt,
     completedAt: g.completedAt,
   }));

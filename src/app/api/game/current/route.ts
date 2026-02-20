@@ -10,6 +10,8 @@ export const dynamic = 'force-dynamic';
  *
  * Finds the game that is currently broadcasting or the next scheduled game.
  * Returns context about the current season state for the homepage.
+ *
+ * Also returns intermission timing info when a game recently completed.
  */
 export async function GET() {
   try {
@@ -62,18 +64,34 @@ export async function GET() {
       currentGame = simulatingRows.length > 0 ? simulatingRows[0] : null;
     }
 
-    // Find the next scheduled game (featured games first)
-    const nextGameRows = await db
+    // Get current week games
+    const weekGames = await db
       .select()
       .from(games)
       .where(
         and(
           eq(games.seasonId, season.id),
-          eq(games.status, 'scheduled'),
           eq(games.week, season.currentWeek)
         )
-      )
-      .limit(5);
+      );
+
+    // Find the next scheduled game — check current week first
+    let nextGameRows = weekGames.filter((g) => g.status === 'scheduled');
+
+    // Cross-week lookup: if no scheduled games in current week, check next week
+    if (nextGameRows.length === 0) {
+      nextGameRows = await db
+        .select()
+        .from(games)
+        .where(
+          and(
+            eq(games.seasonId, season.id),
+            eq(games.week, season.currentWeek + 1),
+            eq(games.status, 'scheduled')
+          )
+        )
+        .limit(5);
+    }
 
     // Prefer featured game, fall back to any scheduled game
     const nextGame =
@@ -100,6 +118,7 @@ export async function GET() {
         awayTeam: awayTeamRows[0] ?? null,
         homeScore: game.homeScore ?? 0,
         awayScore: game.awayScore ?? 0,
+        scheduledAt: game.scheduledAt,
         broadcastStartedAt: game.broadcastStartedAt,
         completedAt: game.completedAt,
       };
@@ -110,19 +129,30 @@ export async function GET() {
       currentGame?.id !== nextGame?.id ? hydrateGameTeams(nextGame) : null,
     ]);
 
-    // Get count of completed games this week to show progress
-    const weekGames = await db
-      .select()
-      .from(games)
-      .where(
-        and(
-          eq(games.seasonId, season.id),
-          eq(games.week, season.currentWeek)
-        )
-      );
-
     const completedThisWeek = weekGames.filter((g) => g.status === 'completed').length;
     const totalThisWeek = weekGames.length;
+
+    // Intermission timing: check for recently completed game within 15-min window
+    const INTERMISSION_MS = 15 * 60 * 1000;
+    let intermission: { endsAt: string; remainingSeconds: number } | null = null;
+
+    if (!currentGame) {
+      const recentCompleted = weekGames
+        .filter((g) => g.status === 'completed' && g.completedAt)
+        .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0];
+
+      if (recentCompleted?.completedAt) {
+        const endsAtMs = recentCompleted.completedAt.getTime() + INTERMISSION_MS;
+        const remainingMs = endsAtMs - Date.now();
+
+        if (remainingMs > 0 && nextGameRows.length > 0) {
+          intermission = {
+            endsAt: new Date(endsAtMs).toISOString(),
+            remainingSeconds: Math.ceil(remainingMs / 1000),
+          };
+        }
+      }
+    }
 
     return NextResponse.json({
       currentGame: hydratedCurrent,
@@ -134,6 +164,7 @@ export async function GET() {
         completed: completedThisWeek,
         total: totalThisWeek,
       },
+      intermission,
     });
   } catch (error) {
     console.error('Error fetching current game:', error);

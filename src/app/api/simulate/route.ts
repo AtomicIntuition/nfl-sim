@@ -34,9 +34,7 @@ export const maxDuration = 300; // 5 minute timeout for simulation
  * Actions determined by current season state:
  *   - create_season: No active season exists, generate a new one
  *   - start_game: Simulate the next featured game, store events, begin broadcast
- *   - complete_week: Simulate remaining non-featured games, update standings
  *   - advance_week: All games this week done, move to next week
- *   - start_playoffs: Regular season complete, transition to playoffs
  *   - season_complete: Super Bowl played, finalize season
  *   - idle: Nothing to do right now
  */
@@ -82,14 +80,6 @@ async function handleSimulate(request: NextRequest) {
         });
       }
 
-      case 'complete_week': {
-        const result = await handleCompleteWeek(action.seasonId, action.week);
-        return NextResponse.json({
-          action: 'complete_week',
-          ...result,
-        });
-      }
-
       case 'advance_week': {
         const result = await handleAdvanceWeek(action.seasonId);
         return NextResponse.json({
@@ -129,7 +119,6 @@ async function handleSimulate(request: NextRequest) {
 type SimAction =
   | { type: 'create_season' }
   | { type: 'start_game'; seasonId: string; gameId: string }
-  | { type: 'complete_week'; seasonId: string; week: number }
   | { type: 'advance_week'; seasonId: string }
   | { type: 'season_complete'; seasonId: string }
   | { type: 'idle'; message: string };
@@ -213,6 +202,20 @@ async function determineNextAction(): Promise<SimAction> {
             activeGame.awayScore ?? 0
           );
         }
+
+        // Set scheduledAt for the next game (completedAt + 15min intermission)
+        const completedAt = new Date();
+        const nextScheduled = weekGames.find(
+          (g) => g.status === 'scheduled' && g.id !== activeGame.id
+        );
+        if (nextScheduled) {
+          const nextTime = new Date(completedAt.getTime() + 15 * 60 * 1000);
+          await db
+            .update(games)
+            .set({ scheduledAt: nextTime })
+            .where(eq(games.id, nextScheduled.id));
+        }
+
         // Fall through to find next action
       } else {
         return { type: 'idle', message: 'Game currently broadcasting' };
@@ -410,6 +413,9 @@ async function handleCreateSeason() {
       .where(eq(games.id, featuredId));
   }
 
+  // Estimate game times for week 1 (first game starts now)
+  await estimateWeekGameTimes(seasonId, 1, new Date());
+
   // Initialize standings for all teams
   const standingsValues = allTeams.map((team) => ({
     seasonId,
@@ -584,168 +590,6 @@ async function handleStartGame(seasonId: string, gameId: string) {
   };
 }
 
-async function handleCompleteWeek(seasonId: string, week: number) {
-  // Get all scheduled (non-featured) games for this week
-  const scheduledGames = await db
-    .select()
-    .from(games)
-    .where(
-      and(
-        eq(games.seasonId, seasonId),
-        eq(games.week, week),
-        eq(games.status, 'scheduled')
-      )
-    );
-
-  let gamesCompleted = 0;
-
-  for (const game of scheduledGames) {
-    // Get team data
-    const [homeTeamRows, awayTeamRows] = await Promise.all([
-      db.select().from(teams).where(eq(teams.id, game.homeTeamId)).limit(1),
-      db.select().from(teams).where(eq(teams.id, game.awayTeamId)).limit(1),
-    ]);
-
-    const homeTeam = homeTeamRows[0];
-    const awayTeam = awayTeamRows[0];
-
-    if (!homeTeam || !awayTeam) continue;
-
-    // Fetch player rosters for both teams
-    const [homePlayerRows, awayPlayerRows] = await Promise.all([
-      db.select().from(players).where(eq(players.teamId, homeTeam.id)),
-      db.select().from(players).where(eq(players.teamId, awayTeam.id)),
-    ]);
-
-    // Run full simulation engine (same as featured games, just not broadcast)
-    const simHomeTeam = mapDbTeamToSim(homeTeam);
-    const simAwayTeam = mapDbTeamToSim(awayTeam);
-    const simHomePlayers = homePlayerRows.map(mapDbPlayerToSim);
-    const simAwayPlayers = awayPlayerRows.map(mapDbPlayerToSim);
-
-    const simResult = simulateGame({
-      homeTeam: simHomeTeam,
-      awayTeam: simAwayTeam,
-      homePlayers: simHomePlayers,
-      awayPlayers: simAwayPlayers,
-      gameType: game.gameType as GameType,
-    });
-
-    // Store all events so users can review the full game
-    const dbEvents = simResult.events.map((event, idx) => ({
-      gameId: game.id,
-      eventNumber: idx + 1,
-      eventType: event.playResult.type,
-      playResult: event.playResult as unknown as Record<string, unknown>,
-      commentary: event.commentary as unknown as Record<string, unknown>,
-      gameState: event.gameState as unknown as Record<string, unknown>,
-      narrativeContext: event.narrativeContext as unknown as Record<string, unknown>,
-      displayTimestamp: event.timestamp,
-    }));
-
-    if (dbEvents.length > 0) {
-      const BATCH_SIZE = 50;
-      for (let i = 0; i < dbEvents.length; i += BATCH_SIZE) {
-        const batch = dbEvents.slice(i, i + BATCH_SIZE);
-        await db.insert(gameEvents).values(batch);
-      }
-    }
-
-    const boxScoreWithMvp = {
-      ...simResult.boxScore as unknown as Record<string, unknown>,
-      mvp: simResult.mvp,
-    };
-
-    // Mark completed immediately (no broadcast for non-featured games)
-    await db
-      .update(games)
-      .set({
-        status: 'completed',
-        homeScore: simResult.finalScore.home,
-        awayScore: simResult.finalScore.away,
-        boxScore: boxScoreWithMvp,
-        totalPlays: simResult.totalPlays,
-        completedAt: new Date(),
-        serverSeedHash: simResult.serverSeedHash,
-        serverSeed: simResult.serverSeed,
-        clientSeed: simResult.clientSeed,
-        nonce: simResult.nonce,
-        mvpPlayerId: simResult.mvp?.player?.id ?? null,
-      })
-      .where(eq(games.id, game.id));
-
-    // Update standings for both teams
-    await updateStandings(
-      seasonId,
-      homeTeam,
-      awayTeam,
-      simResult.finalScore.home,
-      simResult.finalScore.away
-    );
-
-    gamesCompleted++;
-  }
-
-  // Also mark any broadcasting games as completed if they exist
-  const broadcastingGames = await db
-    .select()
-    .from(games)
-    .where(
-      and(
-        eq(games.seasonId, seasonId),
-        eq(games.week, week),
-        eq(games.status, 'broadcasting')
-      )
-    );
-
-  for (const bg of broadcastingGames) {
-    // Check if broadcast duration has been long enough
-    if (bg.broadcastStartedAt) {
-      const elapsed =
-        Date.now() - new Date(bg.broadcastStartedAt).getTime();
-
-      // Query actual game event duration instead of using a fixed minimum
-      const lastEvt = await db
-        .select()
-        .from(gameEvents)
-        .where(eq(gameEvents.gameId, bg.id))
-        .orderBy(desc(gameEvents.displayTimestamp))
-        .limit(1);
-      const bgDurationMs = lastEvt[0]?.displayTimestamp ?? 0;
-      const MIN_BROADCAST_CW = bgDurationMs + 60_000; // full event stream + 60s buffer
-
-      if (elapsed >= MIN_BROADCAST_CW) {
-        await db
-          .update(games)
-          .set({ status: 'completed', completedAt: new Date() })
-          .where(eq(games.id, bg.id));
-
-        // Update standings now that the game is officially complete
-        const [ht, at] = await Promise.all([
-          db.select().from(teams).where(eq(teams.id, bg.homeTeamId)).limit(1),
-          db.select().from(teams).where(eq(teams.id, bg.awayTeamId)).limit(1),
-        ]);
-
-        if (ht[0] && at[0]) {
-          await updateStandings(
-            seasonId,
-            ht[0],
-            at[0],
-            bg.homeScore ?? 0,
-            bg.awayScore ?? 0
-          );
-        }
-      }
-    }
-  }
-
-  return {
-    week,
-    gamesCompleted,
-    message: `Week ${week}: ${gamesCompleted} background games completed`,
-  };
-}
-
 async function handleAdvanceWeek(seasonId: string) {
   const seasonRows = await db
     .select()
@@ -770,6 +614,7 @@ async function handleAdvanceWeek(seasonId: string) {
 
     // Generate Wild Card games based on standings
     const gamesCreated = await generateWildCardGames(seasonId);
+    await estimateWeekGameTimes(seasonId, 19, new Date());
 
     return {
       previousWeek: season.currentWeek,
@@ -790,6 +635,7 @@ async function handleAdvanceWeek(seasonId: string) {
       .where(eq(seasons.id, seasonId));
 
     const gamesCreated = await generateDivisionalGames(seasonId);
+    await estimateWeekGameTimes(seasonId, 20, new Date());
 
     return {
       previousWeek: 19,
@@ -810,6 +656,7 @@ async function handleAdvanceWeek(seasonId: string) {
       .where(eq(seasons.id, seasonId));
 
     const gamesCreated = await generateConferenceChampionshipGames(seasonId);
+    await estimateWeekGameTimes(seasonId, 21, new Date());
 
     return {
       previousWeek: 20,
@@ -830,6 +677,7 @@ async function handleAdvanceWeek(seasonId: string) {
       .where(eq(seasons.id, seasonId));
 
     const gamesCreated = await generateSuperBowlGame(seasonId);
+    await estimateWeekGameTimes(seasonId, 22, new Date());
 
     return {
       previousWeek: 21,
@@ -870,6 +718,9 @@ async function handleAdvanceWeek(seasonId: string) {
         .where(eq(games.id, featuredId));
     }
   }
+
+  // Estimate game times for the new week (starting now)
+  await estimateWeekGameTimes(seasonId, nextWeek, new Date());
 
   return {
     previousWeek: season.currentWeek,
@@ -1411,6 +1262,39 @@ async function updateStandings(
             : `L${parseInt((as_.streak ?? 'L0').replace(/[WL]/, '')) + (as_.streak?.startsWith('L') ? 1 : 1)}`,
       })
       .where(eq(standings.id, as_.id));
+  }
+}
+
+// ============================================================
+// Helper: Estimate game times for a week
+// ============================================================
+
+/**
+ * Sets `scheduledAt` for all scheduled games in a given week.
+ * Each game is spaced 20 minutes apart starting from `startTime`.
+ */
+async function estimateWeekGameTimes(
+  seasonId: string,
+  week: number,
+  startTime: Date
+) {
+  const weekGames = await db
+    .select()
+    .from(games)
+    .where(
+      and(
+        eq(games.seasonId, seasonId),
+        eq(games.week, week),
+        eq(games.status, 'scheduled')
+      )
+    );
+
+  for (let i = 0; i < weekGames.length; i++) {
+    const scheduledAt = new Date(startTime.getTime() + i * 20 * 60 * 1000);
+    await db
+      .update(games)
+      .set({ scheduledAt })
+      .where(eq(games.id, weekGames[i].id));
   }
 }
 

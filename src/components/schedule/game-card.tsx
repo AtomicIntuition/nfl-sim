@@ -8,6 +8,29 @@ interface GameCardProps {
   game: ScheduledGame;
 }
 
+function formatEST(date: Date): string {
+  return date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }) + ' EST';
+}
+
+function getGameTimeLabel(game: ScheduledGame): string | null {
+  if (game.status === 'broadcasting' || game.status === 'simulating') {
+    return 'LIVE NOW';
+  }
+  if (game.status === 'completed' && game.broadcastStartedAt) {
+    return formatEST(new Date(game.broadcastStartedAt));
+  }
+  if (game.status === 'scheduled' && game.scheduledAt) {
+    return formatEST(new Date(game.scheduledAt));
+  }
+  return null;
+}
+
 export function GameCard({ game }: GameCardProps) {
   const { homeTeam, awayTeam, homeScore, awayScore, status } = game;
   const isFinished = status === 'completed';
@@ -17,6 +40,8 @@ export function GameCard({ game }: GameCardProps) {
 
   const homeWon = isFinished && hasScores && homeScore > awayScore;
   const awayWon = isFinished && hasScores && awayScore > homeScore;
+
+  const timeLabel = getGameTimeLabel(game);
 
   return (
     <Link
@@ -36,29 +61,41 @@ export function GameCard({ game }: GameCardProps) {
       )}
 
       <div className="px-4 py-3.5">
-        {/* Top row: status + meta */}
+        {/* Top row: status + time + meta */}
         <div className="flex items-center justify-between mb-3">
-          {isLive && (
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-live-red opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-live-red" />
+          <div className="flex items-center gap-2">
+            {isLive && (
+              <div className="flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-live-red opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-live-red" />
+                </span>
+                <span className="text-[10px] font-bold text-live-red uppercase tracking-widest">
+                  Live
+                </span>
+              </div>
+            )}
+            {isFinished && (
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                Final
               </span>
-              <span className="text-[10px] font-bold text-live-red uppercase tracking-widest">
-                Live
+            )}
+            {isUpcoming && !timeLabel && (
+              <span className="text-[10px] font-medium text-text-muted uppercase tracking-widest">
+                Upcoming
               </span>
-            </div>
-          )}
-          {isFinished && (
-            <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-              Final
-            </span>
-          )}
-          {isUpcoming && (
-            <span className="text-[10px] font-medium text-text-muted uppercase tracking-widest">
-              Upcoming
-            </span>
-          )}
+            )}
+            {isUpcoming && timeLabel && (
+              <span className="text-[10px] font-medium text-text-secondary tracking-wide">
+                {timeLabel}
+              </span>
+            )}
+            {isFinished && timeLabel && (
+              <span className="text-[10px] text-text-muted tracking-wide ml-1">
+                {timeLabel}
+              </span>
+            )}
+          </div>
           {game.isFeatured && (
             <span className="text-[10px] font-bold text-gold uppercase tracking-wider">
               Featured

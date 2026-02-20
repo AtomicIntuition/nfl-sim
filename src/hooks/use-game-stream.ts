@@ -50,6 +50,7 @@ export function useGameStream(gameId: string | null): GameStreamState & {
   const playbackQueueRef = useRef<GameEvent[]>([]);
   const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isCatchingUpRef = useRef(false);
+  const isReconnectingRef = useRef(false);
 
   const clearTimers = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -92,7 +93,13 @@ export function useGameStream(gameId: string | null): GameStreamState & {
     }
     clearTimers();
 
-    setState((prev) => ({ ...prev, status: 'connecting', error: null }));
+    // When reconnecting (server-initiated or error recovery with existing state),
+    // keep the current UI state instead of flashing back to "connecting"
+    if (!isReconnectingRef.current) {
+      setState((prev) => ({ ...prev, status: 'connecting', error: null }));
+    } else {
+      setState((prev) => ({ ...prev, error: null }));
+    }
 
     const url = `/api/game/${gameId}/stream`;
     const eventSource = new EventSource(url);
@@ -100,6 +107,7 @@ export function useGameStream(gameId: string | null): GameStreamState & {
 
     eventSource.onopen = () => {
       reconnectAttemptRef.current = 0;
+      isReconnectingRef.current = false;
     };
 
     eventSource.onmessage = (event) => {
@@ -174,6 +182,15 @@ export function useGameStream(gameId: string | null): GameStreamState & {
             break;
           }
 
+          case 'reconnect': {
+            // Server is about to close the connection (approaching Vercel timeout).
+            // Reconnect seamlessly without resetting UI state.
+            isReconnectingRef.current = true;
+            reconnectAttemptRef.current = 0;
+            setTimeout(() => connect(), 100);
+            break;
+          }
+
           case 'week_recap': {
             // Week recap can be handled by the parent component
             // We just store it as an event for now
@@ -198,9 +215,9 @@ export function useGameStream(gameId: string | null): GameStreamState & {
       eventSource.close();
       eventSourceRef.current = null;
 
-      // Don't reconnect if the game is over
+      // Don't reconnect if the game is over or intermission
       setState((prev) => {
-        if (prev.status === 'game_over') return prev;
+        if (prev.status === 'game_over' || prev.status === 'intermission') return prev;
 
         const attempt = reconnectAttemptRef.current;
         const delay = Math.min(
@@ -209,14 +226,21 @@ export function useGameStream(gameId: string | null): GameStreamState & {
         );
         reconnectAttemptRef.current = attempt + 1;
 
+        // If we have events, reconnect silently in the background
+        // without changing the displayed status (no UI flash)
+        if (prev.events.length > 0) {
+          isReconnectingRef.current = true;
+        }
+
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
         }, delay);
 
+        // Keep current status if we have events (silent reconnect)
         return {
           ...prev,
           status: prev.events.length > 0 ? prev.status : 'error',
-          error: `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s...`,
+          error: prev.events.length > 0 ? null : `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s...`,
         };
       });
     };
@@ -238,6 +262,7 @@ export function useGameStream(gameId: string | null): GameStreamState & {
     setState(INITIAL_STATE);
     playbackQueueRef.current = [];
     isCatchingUpRef.current = false;
+    isReconnectingRef.current = false;
 
     connect();
 

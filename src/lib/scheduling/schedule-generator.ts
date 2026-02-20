@@ -627,6 +627,7 @@ export function generateSeasonSchedule(
       awayScore: null,
       status: 'scheduled' as const,
       isFeatured: false,
+      scheduledAt: null,
       broadcastStartedAt: null,
       completedAt: null,
     }))

@@ -18,6 +18,7 @@ import { LiveScore } from '@/components/game/live-score';
 import { IntermissionCountdown } from '@/components/game/intermission-countdown';
 import { TeamLogo } from '@/components/team/team-logo';
 import { ScoreTicker } from '@/components/game/score-ticker';
+import { HomeAutoRefresh } from '@/components/home/home-auto-refresh';
 
 // ============================================================
 // Data fetching
@@ -253,6 +254,11 @@ export default async function HomePage() {
   return (
     <>
       <Header isLive={isLive} />
+      <HomeAutoRefresh
+        refreshAt={intermission?.endsAt ?? weekBreak?.endsAt ?? null}
+        liveGameId={liveGame?.id ?? null}
+        pageState={isLive ? 'live' : intermission ? 'intermission' : weekBreak ? 'week_break' : nextGame ? 'next_game' : 'week_complete'}
+      />
       <main className="min-h-screen">
         {/* ---- Hero Section ---- */}
         <section className="relative overflow-hidden">
