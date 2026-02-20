@@ -5,6 +5,8 @@ import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 interface FieldSurfaceProps {
   homeTeam: { abbreviation: string; primaryColor: string; secondaryColor: string };
   awayTeam: { abbreviation: string; primaryColor: string; secondaryColor: string };
+  /** Which team has the ball — used for the possession arrow indicator */
+  possession: 'home' | 'away';
 }
 
 /**
@@ -15,7 +17,7 @@ interface FieldSurfaceProps {
  * End zones: 0-100 (away) and 1100-1200 (home), each 100 units = 10 yards
  * Playing field: 100-1100 (100 yards)
  */
-export function FieldSurface({ homeTeam, awayTeam }: FieldSurfaceProps) {
+export function FieldSurface({ homeTeam, awayTeam, possession }: FieldSurfaceProps) {
   const yardNumbers = [10, 20, 30, 40, 50, 40, 30, 20, 10];
 
   return (
@@ -54,15 +56,15 @@ export function FieldSurface({ homeTeam, awayTeam }: FieldSurfaceProps) {
       <rect x="0" y="0" width="100" height="534" fill={awayTeam.primaryColor} opacity="0.6" />
       <rect x="0" y="0" width="100" height="534" fill="rgba(0,0,0,0.15)" />
 
-      {/* Away team abbreviation in end zone — rotated */}
+      {/* Away team abbreviation in end zone — rotated, centered */}
       <text
         x="50"
         y="267"
         textAnchor="middle"
         dominantBaseline="central"
         fill="white"
-        opacity="0.25"
-        fontSize="80"
+        opacity="0.3"
+        fontSize="72"
         fontWeight="900"
         fontFamily="system-ui, sans-serif"
         transform="rotate(-90, 50, 267)"
@@ -70,30 +72,29 @@ export function FieldSurface({ homeTeam, awayTeam }: FieldSurfaceProps) {
         {awayTeam.abbreviation}
       </text>
 
-      {/* Away team logo in end zone */}
+      {/* Away team logo — positioned at far left edge of end zone */}
       <image
         href={getTeamLogoUrl(awayTeam.abbreviation)}
         x="15"
-        y="202"
-        width="70"
-        height="70"
-        opacity="0.4"
-        style={{ mixBlendMode: 'luminosity' }}
+        y="10"
+        width="55"
+        height="55"
+        opacity="0.5"
       />
 
       {/* Home end zone (right) */}
       <rect x="1100" y="0" width="100" height="534" fill={homeTeam.primaryColor} opacity="0.6" />
       <rect x="1100" y="0" width="100" height="534" fill="rgba(0,0,0,0.15)" />
 
-      {/* Home team abbreviation in end zone — rotated */}
+      {/* Home team abbreviation in end zone — rotated, centered */}
       <text
         x="1150"
         y="267"
         textAnchor="middle"
         dominantBaseline="central"
         fill="white"
-        opacity="0.25"
-        fontSize="80"
+        opacity="0.3"
+        fontSize="72"
         fontWeight="900"
         fontFamily="system-ui, sans-serif"
         transform="rotate(90, 1150, 267)"
@@ -101,15 +102,14 @@ export function FieldSurface({ homeTeam, awayTeam }: FieldSurfaceProps) {
         {homeTeam.abbreviation}
       </text>
 
-      {/* Home team logo in end zone */}
+      {/* Home team logo — positioned at far right edge of end zone */}
       <image
         href={getTeamLogoUrl(homeTeam.abbreviation)}
-        x="1115"
-        y="202"
-        width="70"
-        height="70"
-        opacity="0.4"
-        style={{ mixBlendMode: 'luminosity' }}
+        x="1130"
+        y="10"
+        width="55"
+        height="55"
+        opacity="0.5"
       />
 
       {/* Goal lines */}
@@ -205,6 +205,21 @@ export function FieldSurface({ homeTeam, awayTeam }: FieldSurfaceProps) {
         <line x1="1104" y1="304" x2="1104" y2="324" stroke="#FFD700" strokeWidth="2" />
         <line x1="1104" y1="267" x2="1112" y2="267" stroke="#FFD700" strokeWidth="2" />
       </g>
+
+      {/* Possession indicator — small arrow at the bottom showing direction */}
+      {possession === 'away' ? (
+        /* Away team going right → */
+        <g opacity="0.6">
+          <polygon points="605,520 620,512 620,528" fill="white" />
+          <line x1="585" y1="520" x2="615" y2="520" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+        </g>
+      ) : (
+        /* Home team going left ← */
+        <g opacity="0.6">
+          <polygon points="595,520 580,512 580,528" fill="white" />
+          <line x1="585" y1="520" x2="615" y2="520" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+        </g>
+      )}
 
       {/* Field border inner shadow */}
       <rect

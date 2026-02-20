@@ -146,8 +146,8 @@ export function GameViewer({ gameId }: GameViewerProps) {
 
   return (
     <div className="flex flex-col min-h-dvh">
-      {/* ── Mobile Layout ── */}
-      <div className="flex flex-col h-dvh lg:hidden">
+      {/* ── Unified Layout (mobile + desktop) ── */}
+      <div className="flex flex-col h-dvh">
         {/* Navigation bar */}
         <GameNav />
 
@@ -157,24 +157,25 @@ export function GameViewer({ gameId }: GameViewerProps) {
           status={status === 'game_over' ? 'game_over' : 'live'}
         />
 
-        {/* Banners + Field + Momentum */}
-        <div className="flex-shrink-0">
-          {isCatchup && (
-            <div className="bg-info/10 border-b border-info/20 px-3 py-1 text-center">
-              <span className="text-[11px] text-info font-semibold">
-                Catching up to live...
-              </span>
-            </div>
-          )}
-          {error && status !== 'error' && (
-            <div className="bg-danger/10 border-b border-danger/20 px-3 py-1 flex items-center justify-between">
-              <span className="text-[11px] text-danger font-medium">{error}</span>
-              <button onClick={reconnect} className="text-[10px] text-danger font-bold underline">
-                Retry
-              </button>
-            </div>
-          )}
+        {/* Banners */}
+        {isCatchup && (
+          <div className="bg-info/10 border-b border-info/20 px-3 py-1 text-center flex-shrink-0">
+            <span className="text-[11px] sm:text-xs text-info font-semibold">
+              Catching up to live...
+            </span>
+          </div>
+        )}
+        {error && status !== 'error' && (
+          <div className="bg-danger/10 border-b border-danger/20 px-3 py-1 flex items-center justify-between flex-shrink-0">
+            <span className="text-[11px] text-danger font-medium">{error}</span>
+            <button onClick={reconnect} className="text-[10px] text-danger font-bold underline">
+              Retry
+            </button>
+          </div>
+        )}
 
+        {/* ── Above the fold: Field + Momentum + Latest Play ── */}
+        <div className="flex-shrink-0">
           <FieldVisual
             ballPosition={gameState.ballPosition}
             firstDownLine={firstDownLine}
@@ -209,101 +210,26 @@ export function GameViewer({ gameId }: GameViewerProps) {
             awayAbbrev={gameState.awayTeam.abbreviation}
           />
 
+          {/* Latest play commentary — always visible on screen */}
+          <LatestPlayBanner event={currentEvent} isLive={isLive} />
+        </div>
+
+        {/* ── Below the fold: scrollable section ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Narrative context */}
+          {currentEvent?.narrativeContext && (
+            <NarrativeBar narrative={currentEvent.narrativeContext} />
+          )}
+
           {/* Collapsible box score */}
           <BoxScoreDropdown
             boxScore={activeBoxScore}
             homeTeam={gameState.homeTeam}
             awayTeam={gameState.awayTeam}
           />
-        </div>
 
-        {/* Play feed fills remaining space */}
-        <div className="flex-1 min-h-0">
+          {/* Full play history */}
           <PlayFeed events={events} isLive={isLive} />
-        </div>
-      </div>
-
-      {/* ── Desktop Layout ── */}
-      <div className="hidden lg:flex lg:flex-col lg:h-dvh">
-        {/* Navigation bar */}
-        <GameNav />
-
-        {/* Scoreboard at top */}
-        <ScoreBug
-          gameState={gameState}
-          status={status === 'game_over' ? 'game_over' : 'live'}
-        />
-
-        {/* Banners */}
-        {isCatchup && (
-          <div className="bg-info/10 border-b border-info/20 px-4 py-1 text-center flex-shrink-0">
-            <span className="text-xs text-info font-semibold">
-              Catching up to live broadcast...
-            </span>
-          </div>
-        )}
-        {error && status !== 'error' && (
-          <div className="bg-danger/10 border-b border-danger/20 px-4 py-1 flex items-center justify-center gap-3 flex-shrink-0">
-            <span className="text-xs text-danger font-medium">{error}</span>
-            <button onClick={reconnect} className="text-xs text-danger font-bold underline">
-              Retry
-            </button>
-          </div>
-        )}
-
-        {/* Full-width content */}
-        <div className="flex-1 min-h-0 flex flex-col">
-          <div className="flex-shrink-0">
-            <FieldVisual
-              ballPosition={gameState.ballPosition}
-              firstDownLine={firstDownLine}
-              possession={gameState.possession}
-              homeTeam={{
-                abbreviation: gameState.homeTeam.abbreviation,
-                primaryColor: gameState.homeTeam.primaryColor,
-                secondaryColor: gameState.homeTeam.secondaryColor,
-              }}
-              awayTeam={{
-                abbreviation: gameState.awayTeam.abbreviation,
-                primaryColor: gameState.awayTeam.primaryColor,
-                secondaryColor: gameState.awayTeam.secondaryColor,
-              }}
-              down={gameState.down}
-              yardsToGo={gameState.yardsToGo}
-              quarter={gameState.quarter}
-              clock={gameState.clock}
-              lastPlay={currentEvent?.playResult ?? null}
-              isKickoff={gameState.kickoff}
-              isPatAttempt={gameState.patAttempt}
-              gameStatus={status === 'game_over' ? 'game_over' : gameState.isHalftime ? 'halftime' : 'live'}
-              driveStartPosition={driveStartPosition}
-              narrativeContext={currentEvent?.narrativeContext ?? null}
-            />
-            <MomentumMeter
-              momentum={momentum}
-              homeColor={gameState.homeTeam.primaryColor}
-              awayColor={gameState.awayTeam.primaryColor}
-              homeAbbrev={gameState.homeTeam.abbreviation}
-              awayAbbrev={gameState.awayTeam.abbreviation}
-            />
-
-            {/* Narrative context */}
-            {currentEvent?.narrativeContext && (
-              <NarrativeBar narrative={currentEvent.narrativeContext} />
-            )}
-
-            {/* Collapsible box score */}
-            <BoxScoreDropdown
-              boxScore={activeBoxScore}
-              homeTeam={gameState.homeTeam}
-              awayTeam={gameState.awayTeam}
-            />
-          </div>
-
-          {/* Play feed fills remaining space */}
-          <div className="flex-1 min-h-0">
-            <PlayFeed events={events} isLive={isLive} />
-          </div>
         </div>
       </div>
     </div>
@@ -334,6 +260,77 @@ function GameNav() {
   );
 }
 
+// ── Latest Play Banner (above the fold) ──────────────────────
+
+function LatestPlayBanner({
+  event,
+  isLive,
+}: {
+  event: import('@/lib/simulation/types').GameEvent | null;
+  isLive: boolean;
+}) {
+  if (!event) {
+    return (
+      <div className="px-3 py-3 text-center text-text-muted text-sm border-b border-border/30">
+        Waiting for the first play...
+      </div>
+    );
+  }
+
+  const { playResult, commentary } = event;
+
+  // Badge for big plays
+  let badge: string | null = null;
+  let badgeColor = '#2d3548';
+  if (playResult.isTouchdown) { badge = 'TOUCHDOWN'; badgeColor = '#fbbf24'; }
+  else if (playResult.turnover) { badge = 'TURNOVER'; badgeColor = '#ef4444'; }
+  else if (playResult.scoring) { badge = 'SCORE'; badgeColor = '#60a5fa'; }
+  else if (playResult.type === 'sack') { badge = 'SACK'; badgeColor = '#f97316'; }
+  else if (playResult.yardsGained >= 15) { badge = 'BIG PLAY'; badgeColor = '#22c55e'; }
+
+  return (
+    <div
+      className="px-3 py-2.5 border-b border-border/30"
+      style={badge ? { borderLeftWidth: '3px', borderLeftColor: badgeColor } : undefined}
+    >
+      {/* Badge + yards */}
+      <div className="flex items-center gap-2 mb-1">
+        {badge && (
+          <span
+            className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: `${badgeColor}20`, color: badgeColor }}
+          >
+            {badge}
+          </span>
+        )}
+        {playResult.yardsGained !== 0 &&
+          playResult.type !== 'kickoff' &&
+          playResult.type !== 'punt' &&
+          playResult.type !== 'extra_point' &&
+          playResult.type !== 'field_goal' && (
+            <span className={`text-xs font-mono font-bold tabular-nums ${
+              playResult.yardsGained > 0 ? 'text-success' : 'text-danger'
+            }`}>
+              {playResult.yardsGained > 0 ? '+' : ''}{playResult.yardsGained} yds
+            </span>
+          )}
+      </div>
+
+      {/* Play-by-play */}
+      <p className="text-[13px] sm:text-sm font-semibold text-text-primary leading-snug">
+        {commentary.playByPlay}
+      </p>
+
+      {/* Color analysis */}
+      {commentary.colorAnalysis && (
+        <p className="text-xs italic text-text-secondary leading-snug mt-0.5 line-clamp-2">
+          {commentary.colorAnalysis}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Collapsible Box Score Dropdown ────────────────────────────
 
 function BoxScoreDropdown({
@@ -357,7 +354,7 @@ function BoxScoreDropdown({
           Box Score
         </span>
         <svg
-          className="w-4 h-4 text-text-muted transition-transform"
+          className="w-4 h-4 text-text-muted transition-transform duration-200"
           style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
           viewBox="0 0 20 20"
           fill="currentColor"
@@ -365,15 +362,20 @@ function BoxScoreDropdown({
           <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
         </svg>
       </button>
-      {open && (
-        <div className="max-h-[50vh] overflow-y-auto border-t border-border/30">
+      <div
+        className="overflow-hidden transition-all duration-300 ease-in-out"
+        style={{
+          maxHeight: open ? '50vh' : '0px',
+        }}
+      >
+        <div className="overflow-y-auto border-t border-border/30" style={{ maxHeight: '50vh' }}>
           <BoxScore
             boxScore={boxScoreData}
             homeTeam={home}
             awayTeam={away}
           />
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -618,6 +620,14 @@ function IntermissionScreen({
   const router = useRouter();
   const [countdown, setCountdown] = useState(initialCountdown);
 
+  // Parse team abbreviations from message like "Up next: SF @ ARI"
+  const matchup = useMemo(() => {
+    if (!message) return null;
+    const match = message.match(/Up next:\s*(\w+)\s*@\s*(\w+)/i);
+    if (!match) return null;
+    return { away: match[1], home: match[2] };
+  }, [message]);
+
   // Live countdown timer that decrements every second
   useEffect(() => {
     if (countdown <= 0) return;
@@ -641,13 +651,36 @@ function IntermissionScreen({
     <div className="min-h-dvh flex flex-col">
       <GameNav />
       <div className="flex-1 flex items-center justify-center px-4">
-        <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center space-y-4">
+        <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center space-y-5">
           <Badge variant="default" size="md">
             INTERMISSION
           </Badge>
-          {message && (
+
+          {/* Team logos + matchup */}
+          {matchup ? (
+            <div className="flex items-center justify-center gap-6">
+              <div className="flex flex-col items-center">
+                <img
+                  src={getTeamLogoUrl(matchup.away)}
+                  alt={matchup.away}
+                  className="w-16 h-16 object-contain drop-shadow-lg"
+                />
+                <span className="text-sm font-bold mt-1.5">{matchup.away}</span>
+              </div>
+              <span className="text-xl font-black text-text-muted">@</span>
+              <div className="flex flex-col items-center">
+                <img
+                  src={getTeamLogoUrl(matchup.home)}
+                  alt={matchup.home}
+                  className="w-16 h-16 object-contain drop-shadow-lg"
+                />
+                <span className="text-sm font-bold mt-1.5">{matchup.home}</span>
+              </div>
+            </div>
+          ) : message ? (
             <p className="text-sm text-text-secondary">{message}</p>
-          )}
+          ) : null}
+
           {countdown > 0 ? (
             <div className="font-mono text-3xl font-black text-gold tabular-nums">
               {Math.floor(countdown / 60)}:

@@ -67,7 +67,17 @@ export function FieldVisual({
   const fieldStart = endZoneWidth;
   const fieldWidth = 100 - endZoneWidth * 2;
 
-  const ballLeft = fieldStart + (absoluteBallPct / 100) * fieldWidth;
+  let ballLeft = fieldStart + (absoluteBallPct / 100) * fieldWidth;
+
+  // Push ball INTO the end zone on touchdowns (not just at the goal line)
+  if (lastPlay?.isTouchdown) {
+    if (absoluteBallPct >= 95) {
+      ballLeft = 96; // Deep in the home (right) end zone
+    } else if (absoluteBallPct <= 5) {
+      ballLeft = 4;  // Deep in the away (left) end zone
+    }
+  }
+
   const firstDownLeft = fieldStart + (absoluteFirstDownPct / 100) * fieldWidth;
   const driveStartLeft = fieldStart + (absoluteDriveStartPct / 100) * fieldWidth;
 
@@ -217,7 +227,7 @@ export function FieldVisual({
         {/* Perspective wrapper for 3D depth effect */}
         <div className="field-perspective absolute inset-0">
           {/* SVG field surface (grass, lines, end zones) */}
-          <FieldSurface homeTeam={homeTeam} awayTeam={awayTeam} />
+          <FieldSurface homeTeam={homeTeam} awayTeam={awayTeam} possession={possession} />
 
           {/* Down & distance overlay (yellow zone, LOS, first-down line) */}
           <div className="absolute inset-0">
