@@ -702,6 +702,7 @@ export interface Prediction {
 
 export interface UserScore {
   userId: string;
+  displayName?: string | null;
   totalPoints: number;
   correctPredictions: number;
   totalPredictions: number;

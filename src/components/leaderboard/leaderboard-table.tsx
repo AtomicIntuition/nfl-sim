@@ -69,7 +69,7 @@ export function LeaderboardTable({
                       isCurrentUser ? "text-gold" : "text-text-primary"
                     }`}
                   >
-                    {user.username || `Predictor ${user.userId.slice(0, 8)}`}
+                    {user.displayName || user.username || `Predictor ${user.userId.slice(0, 8)}`}
                     {isCurrentUser && (
                       <span className="ml-2 text-xs text-gold">(You)</span>
                     )}

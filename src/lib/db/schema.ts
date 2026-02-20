@@ -256,6 +256,7 @@ export const predictions = pgTable(
 export const userScores = pgTable('user_scores', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: varchar('user_id', { length: 100 }).notNull().unique(),
+  displayName: varchar('display_name', { length: 30 }),
   totalPoints: integer('total_points').default(0),
   correctPredictions: integer('correct_predictions').default(0),
   totalPredictions: integer('total_predictions').default(0),

@@ -9,12 +9,15 @@ import {
   players,
   gameEvents,
   standings,
+  predictions,
 } from '@/lib/db/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { generateSeasonSchedule } from '@/lib/scheduling/schedule-generator';
 import { calculatePlayoffSeeds } from '@/lib/scheduling/playoff-manager';
 import { simulateGame } from '@/lib/simulation/engine';
 import { ESTIMATED_GAME_SLOT_MS } from '@/lib/simulation/constants';
+import { scorePredictions } from '@/lib/db/queries/predictions';
+import { updateUserScore } from '@/lib/db/queries/leaderboard';
 import type {
   Team,
   Player as SimPlayer,
@@ -202,6 +205,28 @@ async function determineNextAction(): Promise<SimAction> {
             activeGame.homeScore ?? 0,
             activeGame.awayScore ?? 0
           );
+        }
+
+        // Score predictions for this completed game
+        const homeScore = activeGame.homeScore ?? 0;
+        const awayScore = activeGame.awayScore ?? 0;
+        const winnerId = homeScore >= awayScore ? activeGame.homeTeamId : activeGame.awayTeamId;
+        try {
+          await scorePredictions(activeGame.id, winnerId, homeScore, awayScore);
+          // Update each predictor's leaderboard score
+          const gamePreds = await db
+            .select()
+            .from(predictions)
+            .where(eq(predictions.gameId, activeGame.id));
+          for (const pred of gamePreds) {
+            await updateUserScore(
+              pred.userId,
+              pred.pointsEarned ?? 0,
+              pred.result === 'won',
+            );
+          }
+        } catch (e) {
+          console.error('Failed to score predictions:', e);
         }
 
         // Re-project future game times from this completion point

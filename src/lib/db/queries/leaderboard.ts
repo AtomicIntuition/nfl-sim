@@ -30,7 +30,7 @@ export async function updateUserScore(
   const existing = await getUserScore(userId);
 
   if (!existing) {
-    // Create new user score entry
+    // Create new user score entry (displayName may already exist from /api/user)
     await db.insert(userScores).values({
       userId,
       totalPoints: pointsEarned,

@@ -47,7 +47,19 @@ function getUserId(): string {
     userId = crypto.randomUUID();
     localStorage.setItem('gridiron-user-id', userId);
   }
+  // Also set as cookie so server-side pages (leaderboard) can identify user
+  document.cookie = `gridiron-user-id=${userId};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
   return userId;
+}
+
+function getDisplayName(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('gridiron-display-name');
+}
+
+function setDisplayName(name: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('gridiron-display-name', name);
 }
 
 function getStoredPrediction(gameId: string): StoredPrediction | null {
@@ -73,19 +85,27 @@ export function PregameView({
 }: PregameViewProps) {
   const [userPrediction, setUserPrediction] = useState<StoredPrediction | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [pendingPrediction, setPendingPrediction] = useState<{
+    predictedWinner: 'home' | 'away';
+    predictedHomeScore: number;
+    predictedAwayScore: number;
+  } | null>(null);
 
   // Load persisted prediction on mount
   useEffect(() => {
     setUserPrediction(getStoredPrediction(gameId));
   }, [gameId]);
 
-  const handlePredict = useCallback(
+  const submitPrediction = useCallback(
     async (prediction: {
       predictedWinner: 'home' | 'away';
       predictedHomeScore: number;
       predictedAwayScore: number;
     }) => {
-      if (!homeTeam || !awayTeam || submitting) return;
+      if (!homeTeam || !awayTeam) return;
 
       setSubmitting(true);
       try {
@@ -123,8 +143,71 @@ export function PregameView({
         setSubmitting(false);
       }
     },
-    [gameId, homeTeam, awayTeam, submitting],
+    [gameId, homeTeam, awayTeam],
   );
+
+  const handlePredict = useCallback(
+    async (prediction: {
+      predictedWinner: 'home' | 'away';
+      predictedHomeScore: number;
+      predictedAwayScore: number;
+    }) => {
+      if (submitting) return;
+
+      // Check if user has set a display name
+      const existingName = getDisplayName();
+      if (!existingName) {
+        // Show name prompt, save prediction for after
+        setPendingPrediction(prediction);
+        setShowNamePrompt(true);
+        return;
+      }
+
+      await submitPrediction(prediction);
+    },
+    [submitting, submitPrediction],
+  );
+
+  const handleNameSubmit = useCallback(async () => {
+    const trimmed = nameInput.trim();
+    if (trimmed.length < 2) {
+      setNameError('Name must be at least 2 characters');
+      return;
+    }
+    if (trimmed.length > 30) {
+      setNameError('Name must be 30 characters or fewer');
+      return;
+    }
+
+    setNameError('');
+    const userId = getUserId();
+
+    try {
+      const res = await fetch('/api/user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+        },
+        body: JSON.stringify({ displayName: trimmed }),
+      });
+
+      if (res.ok) {
+        setDisplayName(trimmed);
+        setShowNamePrompt(false);
+        // Now submit the pending prediction
+        if (pendingPrediction) {
+          await submitPrediction(pendingPrediction);
+          setPendingPrediction(null);
+        }
+      } else {
+        const data = await res.json();
+        setNameError(data.error || 'Failed to set name');
+      }
+    } catch {
+      setNameError('Network error — please try again');
+    }
+  }, [nameInput, pendingPrediction, submitPrediction]);
 
   return (
     <div className="min-h-screen bg-midnight">
@@ -206,6 +289,50 @@ export function PregameView({
             </div>
           </div>
         </Card>
+
+        {/* Username prompt overlay */}
+        {showNamePrompt && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <Card variant="elevated" padding="lg" className="max-w-sm w-full">
+              <h3 className="text-lg font-bold text-text-primary mb-1">
+                Choose Your Name
+              </h3>
+              <p className="text-sm text-text-secondary mb-4">
+                Pick a display name for the prediction leaderboard.
+              </p>
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleNameSubmit()}
+                placeholder="e.g. GridIronKing42"
+                maxLength={30}
+                autoFocus
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-gold transition-colors mb-2"
+              />
+              {nameError && (
+                <p className="text-xs text-live-red mb-2">{nameError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleNameSubmit}
+                  className="flex-1 px-4 py-2 bg-gold text-midnight font-bold text-sm rounded-lg hover:bg-gold-bright transition-colors"
+                >
+                  Lock It In
+                </button>
+                <button
+                  onClick={() => {
+                    setShowNamePrompt(false);
+                    setPendingPrediction(null);
+                  }}
+                  className="px-4 py-2 text-text-secondary text-sm rounded-lg border border-border hover:border-border-bright transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Prediction widget */}
         {homeTeam && awayTeam && (

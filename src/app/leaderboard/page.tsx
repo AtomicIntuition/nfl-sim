@@ -1,11 +1,12 @@
 export const dynamic = 'force-dynamic';
 
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import { Header } from '@/components/layout/header';
 import { Card } from '@/components/ui/card';
 import { LeaderboardTable } from '@/components/leaderboard/leaderboard-table';
 import { UserRankCard } from '@/components/leaderboard/user-rank-card';
-import { getLeaderboard, getTotalPredictors } from '@/lib/db/queries/leaderboard';
+import { getLeaderboard, getUserScore, getTotalPredictors } from '@/lib/db/queries/leaderboard';
 import type { UserScore } from '@/lib/simulation/types';
 
 export const metadata: Metadata = {
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
 // Data fetching
 // ============================================================
 
-async function getLeaderboardData() {
+async function getLeaderboardData(userId: string | null) {
   try {
     const [leaderboardRows, totalUsers] = await Promise.all([
       getLeaderboard(100),
@@ -29,19 +30,39 @@ async function getLeaderboardData() {
     const users: (UserScore & { username?: string })[] = leaderboardRows.map(
       (row) => ({
         userId: row.userId,
+        displayName: row.displayName,
         totalPoints: row.totalPoints ?? 0,
         correctPredictions: row.correctPredictions ?? 0,
         totalPredictions: row.totalPredictions ?? 0,
         currentStreak: row.currentStreak ?? 0,
         bestStreak: row.bestStreak ?? 0,
         rank: row.rank ?? 0,
+        username: row.displayName ?? undefined,
       })
     );
 
-    return { users, totalUsers };
+    // Fetch current user's score if they have one
+    let currentUser: UserScore | null = null;
+    if (userId) {
+      const score = await getUserScore(userId);
+      if (score) {
+        currentUser = {
+          userId: score.userId,
+          displayName: score.displayName,
+          totalPoints: score.totalPoints ?? 0,
+          correctPredictions: score.correctPredictions ?? 0,
+          totalPredictions: score.totalPredictions ?? 0,
+          currentStreak: score.currentStreak ?? 0,
+          bestStreak: score.bestStreak ?? 0,
+          rank: score.rank ?? 0,
+        };
+      }
+    }
+
+    return { users, totalUsers, currentUser };
   } catch (error) {
     console.error('Failed to fetch leaderboard data:', error);
-    return { users: [], totalUsers: 0 };
+    return { users: [], totalUsers: 0, currentUser: null };
   }
 }
 
@@ -50,11 +71,11 @@ async function getLeaderboardData() {
 // ============================================================
 
 export default async function LeaderboardPage() {
-  const { users, totalUsers } = await getLeaderboardData();
-
-  // Current user score - null for now, auth integration comes later
-  const currentUserScore: UserScore | null = null;
-  const currentUserId: string | undefined = undefined;
+  // Read userId from cookie (set by client-side on first prediction)
+  const cookieStore = await cookies();
+  const currentUserId = cookieStore.get('gridiron-user-id')?.value ?? null;
+  const { users, totalUsers, currentUser } = await getLeaderboardData(currentUserId);
+  const currentUserScore = currentUser;
 
   return (
     <>
@@ -97,7 +118,7 @@ export default async function LeaderboardPage() {
           <Card variant="default" padding="none">
             <LeaderboardTable
               users={users}
-              currentUserId={currentUserId}
+              currentUserId={currentUserId ?? undefined}
             />
           </Card>
 

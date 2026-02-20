@@ -779,146 +779,137 @@ function IntermissionHero({
 
   return (
     <div className="space-y-4">
-      {/* Completed game final score */}
-      <Card
-        variant="elevated"
-        padding="lg"
-        className="relative overflow-hidden border-gold/20"
-      >
-        <div className="flex items-center gap-2 mb-6">
-          <Badge variant="final" size="md">
-            FINAL
-          </Badge>
-          {completedGame.isFeatured && (
-            <Badge variant="gold" size="sm">
-              Featured Game
-            </Badge>
-          )}
-        </div>
+      {/* ---- PRIMARY: Next game hero with countdown ---- */}
+      {nextGame ? (
+        <Link href={ROUTES.GAME(nextGame.id)} className="block group">
+          <Card
+            variant="elevated"
+            padding="lg"
+            className="relative overflow-hidden hover:border-gold/30 transition-all"
+          >
+            <div className="flex items-center gap-2 mb-6">
+              <Badge variant="upcoming">Up Next</Badge>
+              {nextGame.isFeatured && (
+                <Badge variant="gold" size="sm">
+                  Featured Game
+                </Badge>
+              )}
+            </div>
 
-        <div className="flex items-center justify-center gap-6 sm:gap-12">
-          {/* Away team */}
-          <div className="flex flex-col items-center text-center">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+            {/* Matchup with integrated countdown */}
+            <div className="flex items-center justify-center gap-4 sm:gap-8 lg:gap-12">
+              {/* Away team */}
+              <div className="flex flex-col items-center text-center flex-shrink-0">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                  <TeamLogo
+                    abbreviation={nextGame.awayTeam?.abbreviation ?? '???'}
+                    teamName={nextGame.awayTeam?.name ?? undefined}
+                    size={80}
+                    className="w-full h-full object-contain drop-shadow-lg"
+                  />
+                </div>
+                <p className="text-xs sm:text-sm text-text-secondary">
+                  {nextGame.awayTeam?.city ?? 'Unknown'}
+                </p>
+                <p className="text-sm sm:text-base font-bold">
+                  {nextGame.awayTeam?.mascot ?? ''}
+                </p>
+              </div>
+
+              {/* Center: countdown + VS */}
+              <div className="text-center min-w-0">
+                <IntermissionCountdown endsAt={endsAt} />
+                <p className="text-2xl sm:text-4xl font-black text-text-muted/50 mt-2">VS</p>
+              </div>
+
+              {/* Home team */}
+              <div className="flex flex-col items-center text-center flex-shrink-0">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                  <TeamLogo
+                    abbreviation={nextGame.homeTeam?.abbreviation ?? '???'}
+                    teamName={nextGame.homeTeam?.name ?? undefined}
+                    size={80}
+                    className="w-full h-full object-contain drop-shadow-lg"
+                  />
+                </div>
+                <p className="text-xs sm:text-sm text-text-secondary">
+                  {nextGame.homeTeam?.city ?? 'Unknown'}
+                </p>
+                <p className="text-sm sm:text-base font-bold">
+                  {nextGame.homeTeam?.mascot ?? ''}
+                </p>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="flex justify-center mt-8">
+              <span className="inline-flex items-center gap-2 px-6 py-2.5 bg-gold text-midnight font-bold text-sm rounded-full group-hover:bg-gold-bright transition-colors shadow-lg shadow-gold/20">
+                MAKE YOUR PREDICTION
+              </span>
+            </div>
+          </Card>
+        </Link>
+      ) : (
+        /* No next game — just show countdown */
+        <Card variant="elevated" padding="lg" className="text-center border-gold/20">
+          <IntermissionCountdown endsAt={endsAt} />
+        </Card>
+      )}
+
+      {/* ---- SECONDARY: Compact completed game result ---- */}
+      <Link href={ROUTES.GAME(completedGame.id)} className="block group">
+        <Card
+          variant="glass"
+          padding="sm"
+          className="hover:border-border-bright transition-colors"
+        >
+          <div className="flex items-center gap-3 px-2 py-1">
+            {/* Badge */}
+            <Badge variant="final" size="sm">
+              FINAL
+            </Badge>
+
+            {/* Away team + score */}
+            <div className={`flex items-center gap-2 ${!awayWon && 'opacity-50'}`}>
               <TeamLogo
                 abbreviation={completedGame.awayTeam?.abbreviation ?? '???'}
                 teamName={completedGame.awayTeam?.name ?? undefined}
-                size={80}
-                className={`w-full h-full object-contain drop-shadow-lg ${
-                  !awayWon ? 'opacity-50' : ''
-                }`}
+                size={28}
+                className="w-7 h-7 object-contain shrink-0"
               />
-            </div>
-            <p className="text-xs sm:text-sm text-text-secondary">
-              {completedGame.awayTeam?.city ?? 'Unknown'}
-            </p>
-            <p className="text-sm sm:text-base font-bold">
-              {completedGame.awayTeam?.mascot ?? ''}
-            </p>
-          </div>
-
-          {/* Final score */}
-          <div className="text-center">
-            <div className="flex items-baseline gap-3 sm:gap-5">
-              <span
-                className={`font-mono text-4xl sm:text-6xl font-black tabular-nums ${
-                  awayWon ? 'text-gold' : 'text-text-muted'
-                }`}
-              >
+              <span className="text-xs font-bold">
+                {completedGame.awayTeam?.abbreviation ?? '???'}
+              </span>
+              <span className={`font-mono text-sm font-black tabular-nums ${awayWon ? 'text-gold' : 'text-text-muted'}`}>
                 {completedGame.awayScore ?? 0}
               </span>
-              <span className="text-text-muted text-lg sm:text-2xl font-medium">
-                -
-              </span>
-              <span
-                className={`font-mono text-4xl sm:text-6xl font-black tabular-nums ${
-                  homeWon ? 'text-gold' : 'text-text-muted'
-                }`}
-              >
+            </div>
+
+            <span className="text-text-muted text-xs">-</span>
+
+            {/* Home team + score */}
+            <div className={`flex items-center gap-2 ${!homeWon && 'opacity-50'}`}>
+              <span className={`font-mono text-sm font-black tabular-nums ${homeWon ? 'text-gold' : 'text-text-muted'}`}>
                 {completedGame.homeScore ?? 0}
               </span>
-            </div>
-          </div>
-
-          {/* Home team */}
-          <div className="flex flex-col items-center text-center">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
               <TeamLogo
                 abbreviation={completedGame.homeTeam?.abbreviation ?? '???'}
                 teamName={completedGame.homeTeam?.name ?? undefined}
-                size={80}
-                className={`w-full h-full object-contain drop-shadow-lg ${
-                  !homeWon ? 'opacity-50' : ''
-                }`}
+                size={28}
+                className="w-7 h-7 object-contain shrink-0"
               />
+              <span className="text-xs font-bold">
+                {completedGame.homeTeam?.abbreviation ?? '???'}
+              </span>
             </div>
-            <p className="text-xs sm:text-sm text-text-secondary">
-              {completedGame.homeTeam?.city ?? 'Unknown'}
-            </p>
-            <p className="text-sm sm:text-base font-bold">
-              {completedGame.homeTeam?.mascot ?? ''}
-            </p>
-          </div>
-        </div>
 
-        <div className="flex justify-center mt-6">
-          <Link href={ROUTES.GAME(completedGame.id)}>
-            <span className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors border border-border rounded-full">
-              View Game Recap &rarr;
+            {/* Recap link */}
+            <span className="ml-auto text-xs text-text-muted group-hover:text-text-secondary transition-colors whitespace-nowrap">
+              Recap &rarr;
             </span>
-          </Link>
-        </div>
-      </Card>
-
-      {/* Countdown + next matchup preview */}
-      <Card
-        variant="glass"
-        padding="lg"
-        className="text-center"
-      >
-        <IntermissionCountdown endsAt={endsAt} />
-
-        {nextGame && (
-          <div className="mt-6 pt-6 border-t border-border">
-            <p className="text-xs text-text-muted tracking-wider uppercase mb-4">
-              Up Next
-            </p>
-            <div className="flex items-center justify-center gap-4 sm:gap-8">
-              <div className="flex items-center gap-2">
-                <TeamLogo
-                  abbreviation={nextGame.awayTeam?.abbreviation ?? '???'}
-                  teamName={nextGame.awayTeam?.name ?? undefined}
-                  size={36}
-                  className="w-9 h-9 object-contain"
-                />
-                <span className="text-sm font-bold">
-                  {nextGame.awayTeam?.abbreviation ?? '???'}
-                </span>
-              </div>
-              <span className="text-text-muted text-sm font-medium">vs</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold">
-                  {nextGame.homeTeam?.abbreviation ?? '???'}
-                </span>
-                <TeamLogo
-                  abbreviation={nextGame.homeTeam?.abbreviation ?? '???'}
-                  teamName={nextGame.homeTeam?.name ?? undefined}
-                  size={36}
-                  className="w-9 h-9 object-contain"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-center mt-4">
-              <Link href={ROUTES.GAME(nextGame.id)}>
-                <span className="inline-flex items-center gap-2 px-6 py-2.5 bg-gold text-midnight font-bold text-sm rounded-full hover:bg-gold-bright transition-colors shadow-lg shadow-gold/20">
-                  MAKE YOUR PREDICTION
-                </span>
-              </Link>
-            </div>
           </div>
-        )}
-      </Card>
+        </Card>
+      </Link>
     </div>
   );
 }
