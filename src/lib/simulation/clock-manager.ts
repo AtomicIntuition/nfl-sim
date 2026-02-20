@@ -561,3 +561,110 @@ export function getPlayClockReset(play: PlayResult, state: GameState): number {
   // Standard 40-second play clock
   return PLAY_CLOCK;
 }
+
+// ============================================================================
+// Timeout Strategy
+// ============================================================================
+
+/**
+ * Determine whether a team should call a timeout after the current play.
+ *
+ * NFL teams call timeouts strategically:
+ * 1. Save clock when trailing late in the game (defense calls TO after opponent's play)
+ * 2. Ice the kicker before a field goal attempt
+ * 3. Avoid delay of game penalty
+ * 4. Before the two-minute warning if it helps strategy
+ *
+ * Returns which team (if any) should call a timeout.
+ */
+export function shouldCallTimeout(
+  state: GameState,
+  play: PlayResult,
+  rng: SeededRNG,
+): { team: 'home' | 'away'; reason: string } | null {
+  // Don't call timeouts during special situations
+  if (state.kickoff || state.patAttempt) return null;
+
+  // Can't call a timeout if clock isn't running
+  if (!state.isClockRunning) return null;
+
+  const homeTrailing = state.homeScore < state.awayScore;
+  const awayTrailing = state.awayScore < state.homeScore;
+  const homeDefending = state.possession === 'away';
+  const awayDefending = state.possession === 'home';
+
+  // ── Strategy 1: Trailing team's defense saves clock in 4th quarter ──
+  // When trailing in the 4th quarter with < 2:00, the defensive team
+  // should call timeout to stop the clock and preserve time for their offense.
+  if (state.quarter === 4 && state.clock <= 120) {
+    // Home team is on defense and trailing
+    if (homeDefending && homeTrailing && state.homeTimeouts > 0) {
+      // Don't waste timeout if clock will stop anyway
+      if (play.isClockStopped) return null;
+      // More aggressive as clock gets lower
+      const urgency = state.clock <= 60 ? 0.90 : 0.70;
+      if (rng.probability(urgency)) {
+        return { team: 'home', reason: 'Save clock while trailing' };
+      }
+    }
+    // Away team is on defense and trailing
+    if (awayDefending && awayTrailing && state.awayTimeouts > 0) {
+      if (play.isClockStopped) return null;
+      const urgency = state.clock <= 60 ? 0.90 : 0.70;
+      if (rng.probability(urgency)) {
+        return { team: 'away', reason: 'Save clock while trailing' };
+      }
+    }
+  }
+
+  // ── Strategy 2: Trailing team saves clock in 4th quarter 2:00-5:00 ──
+  // Less aggressive timeout usage between 2 and 5 minutes
+  if (state.quarter === 4 && state.clock > 120 && state.clock <= 300) {
+    if (homeDefending && homeTrailing && state.homeTimeouts > 1) {
+      if (play.isClockStopped) return null;
+      const scoreDiff = state.awayScore - state.homeScore;
+      // Only call timeout if trailing by more than one score
+      if (scoreDiff >= 9 && rng.probability(0.40)) {
+        return { team: 'home', reason: 'Save clock, trailing by multiple scores' };
+      }
+    }
+    if (awayDefending && awayTrailing && state.awayTimeouts > 1) {
+      if (play.isClockStopped) return null;
+      const scoreDiff = state.homeScore - state.awayScore;
+      if (scoreDiff >= 9 && rng.probability(0.40)) {
+        return { team: 'away', reason: 'Save clock, trailing by multiple scores' };
+      }
+    }
+  }
+
+  // ── Strategy 3: Ice the kicker ──
+  // Call timeout right before a field goal attempt to disrupt the kicker.
+  // This happens when the offensive team is in FG range on 4th down.
+  if (state.down === 4 && state.ballPosition >= 63) {
+    // The defending team might ice the kicker
+    if (homeDefending && state.homeTimeouts > 0 && (state.quarter === 4 || state.quarter === 'OT')) {
+      if (rng.probability(0.35)) {
+        return { team: 'home', reason: 'Ice the kicker' };
+      }
+    }
+    if (awayDefending && state.awayTimeouts > 0 && (state.quarter === 4 || state.quarter === 'OT')) {
+      if (rng.probability(0.35)) {
+        return { team: 'away', reason: 'Ice the kicker' };
+      }
+    }
+  }
+
+  // ── Strategy 4: End of first half (Q2) ──
+  // Offense saves clock if driving with < 1:00
+  if (state.quarter === 2 && state.clock <= 60 && state.clock > 5) {
+    const possTeam = state.possession;
+    const timeouts = possTeam === 'home' ? state.homeTimeouts : state.awayTimeouts;
+    if (timeouts > 0 && !play.isClockStopped && state.ballPosition >= 40) {
+      if (rng.probability(0.60)) {
+        return { team: possTeam, reason: 'Save clock for end-of-half drive' };
+      }
+    }
+  }
+
+  return null;
+}

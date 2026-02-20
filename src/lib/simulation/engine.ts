@@ -41,11 +41,14 @@ import {
 // --- Play calling & resolution ---
 import { selectPlay } from './play-caller';
 import { resolvePlay } from './play-generator';
+import { selectFormation } from './formations';
+import { callDefense } from './defensive-coordinator';
 
 // --- Clock ---
 import {
   advanceClock,
   getHalftimeTimeoutReset,
+  shouldCallTimeout,
   type ClockUpdate,
 } from './clock-manager';
 
@@ -441,8 +444,18 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
     const offensePlayers = getOffensePlayers(state, availableHome, availableAway);
     const defensePlayers = getDefensePlayers(state, availableHome, availableAway);
 
-    // --- (b) Select the play call ---
-    const playCall = selectPlay(state, rng);
+    // --- (b) Select formation and play call ---
+    // Formation selection considers game situation and team playStyle
+    const formation = (!state.kickoff && !state.patAttempt)
+      ? selectFormation(state, rng)
+      : undefined;
+
+    const playCall = selectPlay(state, rng, formation);
+
+    // --- (b2) Defensive coordinator calls scheme based on offensive formation ---
+    const defensiveCall = (formation && !state.kickoff && !state.patAttempt)
+      ? callDefense(state, formation, rng)
+      : undefined;
 
     // --- (c) Resolve the play based on type ---
     let playResult: PlayResult;
@@ -465,7 +478,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
     } else if (playCall === 'two_point_run' || playCall === 'two_point_pass') {
       playResult = resolveTwoPoint(playCall, state, rng, offensePlayers);
     } else {
-      // Normal play: run, pass, kneel, spike, screen
+      // Normal play: run, pass, kneel, spike, screen — with formation & defense context
       playResult = resolvePlay(
         playCall,
         state,
@@ -473,6 +486,8 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
         defensePlayers,
         rng,
         momentum / 100, // normalize momentum to -1..1 range for play generator
+        formation,
+        defensiveCall,
       );
     }
 
@@ -1026,6 +1041,22 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
         gameOver = true;
         if (statsAccumulator.currentDrive) {
           endDrive(statsAccumulator, driveEndResult || 'end_of_half', state);
+        }
+      }
+    }
+
+    // --- (i2) Timeout strategy ---
+    // Check if either team should call a timeout after this play
+    if (!gameOver && !state.kickoff && !state.patAttempt && clockUpdate) {
+      const timeoutCall = shouldCallTimeout(state, playResult, rng);
+      if (timeoutCall) {
+        // Apply the timeout: decrement the calling team's timeouts and stop the clock
+        if (timeoutCall.team === 'home' && state.homeTimeouts > 0) {
+          state.homeTimeouts--;
+          state.isClockRunning = false;
+        } else if (timeoutCall.team === 'away' && state.awayTimeouts > 0) {
+          state.awayTimeouts--;
+          state.isClockRunning = false;
         }
       }
     }

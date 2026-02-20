@@ -158,12 +158,27 @@ export type PlayType =
 
 /** The offensive play called before the snap. */
 export type PlayCall =
-  | 'run_inside'
-  | 'run_outside'
-  | 'pass_short'
-  | 'pass_medium'
-  | 'pass_deep'
-  | 'screen_pass'
+  // Run concepts
+  | 'run_inside'          // Legacy: maps to run_power
+  | 'run_outside'         // Legacy: maps to run_outside_zone
+  | 'run_power'           // Inside power run, pulling guard
+  | 'run_zone'            // Inside zone, RB reads blocks
+  | 'run_outside_zone'    // Outside zone stretch
+  | 'run_draw'            // Delayed handoff disguised as pass
+  | 'run_counter'         // Misdirection run
+  | 'run_sweep'           // Speed sweep to outside
+  | 'run_qb_sneak'        // QB sneak for short yardage
+  | 'run_option'          // Read option / RPO run component
+  // Pass concepts
+  | 'pass_quick'          // Quick game: 3-step slants, flats, quick outs
+  | 'pass_short'          // Short routes: curls, hitches, shallow cross
+  | 'pass_medium'         // Medium routes: digs, outs, comebacks
+  | 'pass_deep'           // Deep routes: go, post, corner, fade
+  | 'screen_pass'         // Screen pass (RB, WR, or TE)
+  | 'play_action_short'   // Play action fake + short/medium pass
+  | 'play_action_deep'    // Play action fake + deep pass
+  | 'pass_rpo'            // Run-pass option (QB reads defender post-snap)
+  // Special teams & clock
   | 'punt'
   | 'field_goal'
   | 'extra_point'
@@ -174,6 +189,62 @@ export type PlayCall =
   | 'onside_kick'
   | 'kickoff'
   | 'kickoff_normal';
+
+// ============================================================
+// FORMATION & DEFENSIVE SCHEME TYPES
+// ============================================================
+
+/** Offensive formation the play is run from. */
+export type Formation =
+  | 'under_center'    // Traditional under-center, strong run game
+  | 'shotgun'         // Shotgun, pass-oriented, better vision for QB
+  | 'pistol'          // Pistol, balanced run/pass, disguises play direction
+  | 'spread'          // 4-5 WR spread, stretches defense horizontally
+  | 'i_formation'     // I-formation, power run, play-action
+  | 'singleback'      // Singleback, versatile run/pass
+  | 'goal_line'       // Heavy personnel, short yardage power
+  | 'empty'           // Empty backfield, max protection/route runners
+  | 'wildcat';        // Direct snap to RB, trick play potential
+
+/** Defensive personnel grouping. */
+export type DefensivePersonnel =
+  | 'base_4_3'        // 4 DL, 3 LB — standard against run
+  | 'base_3_4'        // 3 DL, 4 LB — versatile blitz
+  | 'nickel'          // 5 DBs — standard pass defense
+  | 'dime'            // 6 DBs — heavy pass defense
+  | 'goal_line'       // Heavy front — short yardage / goal line
+  | 'prevent';        // Deep prevent — late-game situations
+
+/** Coverage shell the secondary runs. */
+export type CoverageType =
+  | 'cover_0'         // Pure man, no deep safety (all-out blitz)
+  | 'cover_1'         // Man coverage, 1 deep safety
+  | 'cover_2'         // 2 deep safeties, underneath zone
+  | 'cover_3'         // 3 deep zones, 4 underneath
+  | 'cover_4'         // Quarters coverage (4 deep zones)
+  | 'cover_6'         // Quarter-quarter-half hybrid
+  | 'man_press';      // Press man coverage at the line
+
+/** Blitz package — how many extra rushers beyond the base 4. */
+export type BlitzPackage =
+  | 'none'            // Standard 4-man rush
+  | 'lb_blitz'        // 5 rushers (1 extra LB)
+  | 'db_blitz'        // 5-6 rushers (safety/corner blitz)
+  | 'all_out'         // 6-7 rushers (cover-0 all-out)
+  | 'zone_blitz';     // 5 rushers with zone coverage behind
+
+/** Complete defensive play call. */
+export interface DefensiveCall {
+  personnel: DefensivePersonnel;
+  coverage: CoverageType;
+  blitz: BlitzPackage;
+}
+
+/** Complete offensive snap context passed to the play generator. */
+export interface SnapContext {
+  formation: Formation;
+  defense: DefensiveCall;
+}
 
 export interface PlayResult {
   type: PlayType;

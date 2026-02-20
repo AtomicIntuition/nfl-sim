@@ -5,9 +5,15 @@
 // situation, then simulates the outcome through probability checks, yardage
 // generation, turnover/scoring detection, and clock effects. Produces a
 // complete PlayResult with human-readable descriptions and all derived state.
+//
+// v2: Player-rating-driven outcomes, QB progressions, formation/defensive
+//     context modifiers. Individual player attributes (rating, speed,
+//     strength, awareness) now significantly influence play outcomes.
 // ============================================================================
 
 import type {
+  DefensiveCall,
+  Formation,
   GameState,
   PlayCall,
   PlayResult,
@@ -15,6 +21,7 @@ import type {
   Position,
   SeededRNG,
   WeightedOption,
+  YardDistribution,
 } from './types';
 
 import {
@@ -42,6 +49,38 @@ import {
   TWO_POINT_CONVERSION_RATE,
   getFieldGoalAccuracy,
 } from './constants';
+
+import { getFormationModifiers } from './formations';
+import { getDefensiveModifiers } from './defensive-coordinator';
+
+// ============================================================================
+// Extended Yard Distributions for New Play Types
+// ============================================================================
+// Looked up first; falls back to AVERAGE_YARDS from constants.ts.
+// ============================================================================
+
+const EXTENDED_YARDS: Record<string, YardDistribution> = {
+  run_power:        { mean: 3.8, stdDev: 3.0 },
+  run_zone:         { mean: 4.2, stdDev: 3.5 },
+  run_outside_zone: { mean: 4.5, stdDev: 4.0 },
+  run_draw:         { mean: 5.0, stdDev: 4.5 },
+  run_counter:      { mean: 4.0, stdDev: 4.0 },
+  run_sweep:        { mean: 4.8, stdDev: 4.5 },
+  run_qb_sneak:     { mean: 1.5, stdDev: 1.0 },
+  run_option:       { mean: 5.0, stdDev: 4.5 },
+  pass_quick:       { mean: 5.0, stdDev: 2.5 },
+  play_action_short:{ mean: 8.0, stdDev: 4.0 },
+  play_action_deep: { mean: 25.0, stdDev: 10.0 },
+  pass_rpo:         { mean: 6.0, stdDev: 3.5 },
+};
+
+/**
+ * Look up the yard distribution for a play call.
+ * Checks EXTENDED_YARDS first, then falls back to AVERAGE_YARDS.
+ */
+function getYardDistribution(call: string, fallbackKey: string): YardDistribution {
+  return EXTENDED_YARDS[call] ?? AVERAGE_YARDS[call] ?? AVERAGE_YARDS[fallbackKey];
+}
 
 // ============================================================================
 // Helper: Find the highest-rated player at a given position
@@ -223,6 +262,116 @@ function baseResult(call: PlayCall): PlayResult {
 }
 
 // ============================================================================
+// Helper: Compute average rating for a set of positions
+// ============================================================================
+
+function averageRatingByPositions(
+  players: Player[],
+  positions: Position[],
+  fallback: number,
+): number {
+  const matching = players.filter(p => positions.includes(p.position));
+  if (matching.length === 0) return fallback;
+  return matching.reduce((sum, p) => sum + p.rating, 0) / matching.length;
+}
+
+// ============================================================================
+// QB Progression System
+// ============================================================================
+// Instead of randomly picking a receiver, the QB reads through a progression:
+// primary -> secondary -> checkdown -> throwaway. QB awareness determines
+// how far he can get through his reads before pressure arrives.
+// ============================================================================
+
+interface ProgressionResult {
+  target: Player | null;
+  progressionStep: 'primary' | 'secondary' | 'checkdown' | 'throwaway';
+}
+
+function resolveQBProgression(
+  offensePlayers: Player[],
+  call: PlayCall,
+  rng: SeededRNG,
+  qb: Player,
+): ProgressionResult {
+  const receivers = offensePlayers.filter(p => p.position === 'WR' || p.position === 'TE');
+  if (receivers.length === 0) return { target: null, progressionStep: 'throwaway' };
+
+  // Sort by rating (best = primary read)
+  const sorted = [...receivers].sort((a, b) => b.rating - a.rating);
+
+  // QB awareness determines how often he gets through reads
+  const awarenessChance = (qb.awareness - 50) / 100; // 0.10 to 0.49
+
+  // Primary target: best WR/TE
+  const primary = sorted[0];
+  if (rng.probability(0.45 + awarenessChance * 0.3)) {
+    return { target: primary, progressionStep: 'primary' };
+  }
+
+  // Secondary target: second best WR/TE
+  if (sorted.length >= 2) {
+    const secondary = sorted[1];
+    if (rng.probability(0.50 + awarenessChance * 0.2)) {
+      return { target: secondary, progressionStep: 'secondary' };
+    }
+  }
+
+  // Checkdown: RB or TE (lower rated)
+  const checkdowns = offensePlayers.filter(p => p.position === 'RB' || p.position === 'TE');
+  if (checkdowns.length > 0 && rng.probability(0.70)) {
+    const checkdown = rng.weightedChoice(checkdowns.map(p => ({ value: p, weight: p.rating })));
+    return { target: checkdown, progressionStep: 'checkdown' };
+  }
+
+  // Throwaway
+  return { target: null, progressionStep: 'throwaway' };
+}
+
+// ============================================================================
+// Run Play Description Generator
+// ============================================================================
+
+function getRunDescription(
+  call: PlayCall,
+  rusher: Player,
+  qb: Player,
+  yards: number,
+  posStr: string,
+  isTD: boolean,
+): string {
+  const rusherName = formatName(rusher);
+  const qbName = formatName(qb);
+  const yardStr = isTD
+    ? `${yards} yards. TOUCHDOWN!`
+    : `${yards} yard${yards !== 1 ? 's' : ''} to the ${posStr}`;
+
+  switch (call) {
+    case 'run_power':
+      return `${rusherName} powers through behind the pulling guard for ${yardStr}`;
+    case 'run_zone':
+      return `${rusherName} reads the zone block and cuts for ${yardStr}`;
+    case 'run_outside_zone':
+      return `${rusherName} stretches outside on the zone read for ${yardStr}`;
+    case 'run_draw':
+      return `${qbName} hands off on the delayed draw to ${rusherName} for ${yardStr}`;
+    case 'run_counter':
+      return `${rusherName} takes the counter handoff, cuts back for ${yardStr}`;
+    case 'run_sweep':
+      return `${rusherName} sweeps around the edge for ${yardStr}`;
+    case 'run_qb_sneak':
+      return `${qbName} sneaks forward for ${yardStr}`;
+    case 'run_option':
+      return `${qbName} reads the option and ${rusher.position === 'QB' ? 'keeps' : 'pitches to ' + rusherName} for ${yardStr}`;
+    case 'run_outside':
+      return `${rusherName} rushes off right tackle for ${yardStr}`;
+    case 'run_inside':
+    default:
+      return `${rusherName} rushes up the middle for ${yardStr}`;
+  }
+}
+
+// ============================================================================
 // Run Play Resolution
 // ============================================================================
 
@@ -233,26 +382,96 @@ function resolveRunPlay(
   defensePlayers: Player[],
   rng: SeededRNG,
   momentum: number,
+  formation?: Formation,
+  defensiveCall?: DefensiveCall,
 ): PlayResult {
   const result = baseResult(call);
   result.type = 'run';
 
-  const rusher = getPlayerByPosition(offensePlayers, 'RB') ??
-    getPlayerByPosition(offensePlayers, 'QB')!;
+  const qb = getQBOrFallback(offensePlayers);
+
+  // For QB sneaks, always use QB as rusher
+  let rusher: Player;
+  if (call === 'run_qb_sneak') {
+    rusher = qb;
+  } else {
+    rusher = getPlayerByPosition(offensePlayers, 'RB') ?? qb;
+  }
   result.rusher = rusher;
 
   // Base yards from gaussian distribution
-  const yardDist = AVERAGE_YARDS[call] ?? AVERAGE_YARDS['run_inside'];
+  let yardDist: YardDistribution;
+  if (call === 'run_qb_sneak') {
+    yardDist = { mean: 1.5, stdDev: 1.0 };
+  } else {
+    yardDist = getYardDistribution(call, 'run_inside');
+  }
+
   let yards = rng.gaussian(yardDist.mean, yardDist.stdDev);
 
+  // --------------------------------------------------------------------------
   // Apply momentum modifier
+  // --------------------------------------------------------------------------
   yards *= (1 + momentum * MOMENTUM_MAX_EFFECT);
 
+  // --------------------------------------------------------------------------
   // Apply team rating modifier: offense vs defense rating differential
+  // --------------------------------------------------------------------------
   const offTeam = state.possession === 'home' ? state.homeTeam : state.awayTeam;
   const defTeam = state.possession === 'home' ? state.awayTeam : state.homeTeam;
   const ratingDiff = (offTeam.offenseRating - defTeam.defenseRating) / 100;
   yards *= (1 + ratingDiff * 0.15);
+
+  // --------------------------------------------------------------------------
+  // Player rating impact: RB rating
+  // --------------------------------------------------------------------------
+  const rbRating = rusher.position === 'RB' ? rusher.rating : rusher.speed;
+  const ratingBonus = (rbRating - 75) / 100 * 0.25;
+  yards *= (1 + ratingBonus);
+
+  // RB strength affects short yardage (yards to go <= 3)
+  if (state.yardsToGo <= 3) {
+    const strengthBonus = (rusher.strength - 75) / 100 * 0.15;
+    yards += strengthBonus * 2;
+  }
+
+  // --------------------------------------------------------------------------
+  // OL vs DL rating impact
+  // --------------------------------------------------------------------------
+  const avgOL = averageRatingByPositions(offensePlayers, ['OL'], offTeam.offenseRating);
+  const avgDL = averageRatingByPositions(defensePlayers, ['DL', 'LB'], defTeam.defenseRating);
+  const lineDiff = (avgOL - avgDL) / 100;
+  yards *= (1 + lineDiff * 0.20);
+
+  // --------------------------------------------------------------------------
+  // Formation modifiers
+  // --------------------------------------------------------------------------
+  if (formation) {
+    const fmods = getFormationModifiers(formation);
+    yards += fmods.runYardBonus;
+  }
+
+  // --------------------------------------------------------------------------
+  // Defensive call modifiers
+  // --------------------------------------------------------------------------
+  if (defensiveCall) {
+    const dmods = getDefensiveModifiers(defensiveCall);
+    yards *= dmods.runYardModifier;
+  }
+
+  // --------------------------------------------------------------------------
+  // Draw play special logic: bonus vs blitzing defense
+  // --------------------------------------------------------------------------
+  if (call === 'run_draw' && defensiveCall && defensiveCall.blitz !== 'none') {
+    yards += 2.0;
+  }
+
+  // --------------------------------------------------------------------------
+  // QB sneak clamping
+  // --------------------------------------------------------------------------
+  if (call === 'run_qb_sneak') {
+    yards = Math.max(-1, Math.min(yards, 5));
+  }
 
   // Big play chance
   if (rng.probability(BIG_PLAY_RATE)) {
@@ -283,9 +502,7 @@ function resolveRunPlay(
     };
     result.isClockStopped = true;
 
-    const direction = call === 'run_outside' ? 'around the edge' : 'up the middle';
-    result.description =
-      `${formatName(rusher)} rushes ${direction} for ${result.yardsGained} yards. TOUCHDOWN!`;
+    result.description = getRunDescription(call, rusher, qb, result.yardsGained, '', true);
   } else if (newPosition <= 0) {
     // Safety check
     result.isSafety = true;
@@ -301,7 +518,6 @@ function resolveRunPlay(
       `${formatName(rusher)} tackled in the end zone. SAFETY!`;
   } else {
     // Normal run play
-    const direction = call === 'run_outside' ? 'off right tackle' : 'up the middle';
     const posStr = fieldPositionToString(newPosition, state);
 
     if (yards <= 0) {
@@ -309,10 +525,9 @@ function resolveRunPlay(
       result.defender = defender;
       const defName = defender ? ` by ${formatName(defender)}` : '';
       result.description =
-        `${formatName(rusher)} rushes ${direction} and is stopped${defName} for ${yards === 0 ? 'no gain' : `a loss of ${Math.abs(yards)}`} at the ${posStr}`;
+        `${formatName(rusher)} rushes and is stopped${defName} for ${yards === 0 ? 'no gain' : `a loss of ${Math.abs(yards)}`} at the ${posStr}`;
     } else {
-      result.description =
-        `${formatName(rusher)} rushes ${direction} for ${yards} yard${yards !== 1 ? 's' : ''} to the ${posStr}`;
+      result.description = getRunDescription(call, rusher, qb, yards, posStr, false);
     }
   }
 
@@ -389,36 +604,69 @@ function resolvePassPlay(
   defensePlayers: Player[],
   rng: SeededRNG,
   momentum: number,
+  formation?: Formation,
+  defensiveCall?: DefensiveCall,
 ): PlayResult {
   const result = baseResult(call);
 
   const passer = getQBOrFallback(offensePlayers);
   result.passer = passer;
 
-  // Map call to completion rate key
-  const passTypeMap: Record<string, keyof typeof COMPLETION_RATES> = {
-    'pass_short': 'short',
-    'pass_medium': 'medium',
-    'pass_deep': 'deep',
-    'screen_pass': 'screen',
-  };
-  const passType = passTypeMap[call] ?? 'short';
+  const offTeam = state.possession === 'home' ? state.homeTeam : state.awayTeam;
+  const defTeam = state.possession === 'home' ? state.awayTeam : state.homeTeam;
 
   // --------------------------------------------------------------------------
-  // Scramble check: ~8% of pass plays the QB scrambles
+  // RPO Logic: QB reads a key defender, decides run or pass
   // --------------------------------------------------------------------------
-  if (rng.probability(0.08)) {
+  if (call === 'pass_rpo') {
+    if (rng.probability(0.40)) {
+      // QB keeps and runs (treat as scramble with option-runner yards)
+      return resolveScramble(call, state, passer, offensePlayers, defensePlayers, rng, momentum);
+    }
+    // Otherwise: quick pass (use pass_quick completion logic below, but with RPO yards)
+  }
+
+  // --------------------------------------------------------------------------
+  // Scramble check
+  // --------------------------------------------------------------------------
+  let scrambleRate = 0.08;
+  if (formation) {
+    const fmods = getFormationModifiers(formation);
+    scrambleRate *= fmods.scrambleMultiplier;
+  }
+  if (rng.probability(scrambleRate)) {
     return resolveScramble(call, state, passer, offensePlayers, defensePlayers, rng, momentum);
   }
 
   // --------------------------------------------------------------------------
   // Sack check FIRST
   // --------------------------------------------------------------------------
-  // Apply offensive line vs defensive line rating
-  const offTeam = state.possession === 'home' ? state.homeTeam : state.awayTeam;
-  const defTeam = state.possession === 'home' ? state.awayTeam : state.homeTeam;
   const lineDiff = (defTeam.defenseRating - offTeam.offenseRating) / 100;
-  const adjustedSackRate = Math.max(0.01, Math.min(0.15, SACK_RATE + lineDiff * 0.03));
+  let adjustedSackRate = Math.max(0.01, Math.min(0.15, SACK_RATE + lineDiff * 0.03));
+
+  // QB awareness affects sack avoidance
+  const awarenessMod = (passer.awareness - 75) / 100 * 0.02;
+  adjustedSackRate -= awarenessMod;
+
+  // Formation modifiers on sack rate
+  if (formation) {
+    const fmods = getFormationModifiers(formation);
+    adjustedSackRate *= fmods.sackRateMultiplier;
+
+    // Quick release reduces sack rate for quick passes
+    if (call === 'pass_quick') {
+      adjustedSackRate *= (2.0 - fmods.quickReleaseBonus);
+    }
+  }
+
+  // Defensive call modifiers on sack rate
+  if (defensiveCall) {
+    const dmods = getDefensiveModifiers(defensiveCall);
+    adjustedSackRate *= dmods.sackRateMultiplier;
+  }
+
+  // Clamp after all modifiers
+  adjustedSackRate = Math.max(0.01, Math.min(0.25, adjustedSackRate));
 
   if (rng.probability(adjustedSackRate)) {
     result.type = 'sack';
@@ -499,22 +747,149 @@ function resolvePassPlay(
   }
 
   // --------------------------------------------------------------------------
-  // Completion check
+  // QB Progression — determine who the QB throws to
   // --------------------------------------------------------------------------
-  const receiver = selectReceiver(offensePlayers, rng);
+  const progression = resolveQBProgression(offensePlayers, call, rng, passer);
+
+  // Throwaway: incomplete pass, no interception risk, no receiver
+  if (progression.progressionStep === 'throwaway') {
+    result.type = 'pass_incomplete';
+    result.yardsGained = 0;
+    result.isClockStopped = true;
+    result.description =
+      `${formatName(passer)} can't find anyone open, throws it away`;
+    result.clockElapsed = resolveClockElapsed('pass_incomplete', rng, isTwoMinuteDrill(state));
+    return result;
+  }
+
+  const receiver = progression.target;
   result.receiver = receiver;
 
-  // Base completion rate with modifiers
-  let completionRate: number = COMPLETION_RATES[passType];
+  // --------------------------------------------------------------------------
+  // Map call to completion rate key
+  // --------------------------------------------------------------------------
+  const passTypeMap: Record<string, keyof typeof COMPLETION_RATES> = {
+    'pass_short': 'short',
+    'pass_medium': 'medium',
+    'pass_deep': 'deep',
+    'screen_pass': 'screen',
+    'play_action_short': 'short',
+    'play_action_deep': 'deep',
+  };
+  const passType = passTypeMap[call] ?? 'short';
 
-  // QB rating modifier: +/- 5% based on QB rating relative to 80
-  const qbModifier = (passer.rating - 80) / 100 * 0.05;
-  completionRate += qbModifier;
+  // Base completion rate
+  let completionRate: number;
+  if (call === 'pass_quick') {
+    completionRate = 0.76;
+  } else {
+    completionRate = COMPLETION_RATES[passType];
+  }
 
-  // Momentum modifier: +/- 3%
+  // --------------------------------------------------------------------------
+  // Checkdown: +10% completion bonus, uses pass_short yards regardless of call
+  // --------------------------------------------------------------------------
+  const isCheckdown = progression.progressionStep === 'checkdown';
+  if (isCheckdown) {
+    completionRate += 0.10;
+  }
+
+  // --------------------------------------------------------------------------
+  // QB rating modifier: +/- 12% based on QB rating relative to 75
+  // --------------------------------------------------------------------------
+  const qbMod = (passer.rating - 75) / 100 * 0.12;
+  completionRate += qbMod;
+
+  // --------------------------------------------------------------------------
+  // Receiver rating modifier: +/- 8%
+  // --------------------------------------------------------------------------
+  if (receiver) {
+    const recMod = (receiver.rating - 75) / 100 * 0.08;
+    completionRate += recMod;
+  }
+
+  // --------------------------------------------------------------------------
+  // DB coverage quality: average CB + S ratings
+  // --------------------------------------------------------------------------
+  const avgDB = averageRatingByPositions(defensePlayers, ['CB', 'S'], defTeam.defenseRating);
+  const dbMod = (avgDB - 75) / 100 * 0.06;
+  completionRate -= dbMod;
+
+  // --------------------------------------------------------------------------
+  // Momentum modifier
+  // --------------------------------------------------------------------------
   completionRate += momentum * MOMENTUM_MAX_EFFECT;
 
-  // Clamp between reasonable bounds
+  // --------------------------------------------------------------------------
+  // Formation modifiers on pass plays
+  // --------------------------------------------------------------------------
+  if (formation) {
+    const fmods = getFormationModifiers(formation);
+
+    // Play-action bonus
+    if (call === 'play_action_short' || call === 'play_action_deep') {
+      completionRate *= fmods.playActionBonus;
+    }
+
+    // Screen bonus
+    if (call === 'screen_pass') {
+      completionRate *= fmods.screenBonus;
+    }
+
+    // Deep pass modifier
+    if (call === 'pass_deep' || call === 'play_action_deep') {
+      completionRate *= fmods.deepPassModifier;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Defensive call modifiers on pass plays
+  // --------------------------------------------------------------------------
+  if (defensiveCall) {
+    const dmods = getDefensiveModifiers(defensiveCall);
+
+    // Apply coverage modifiers based on pass depth
+    if (call === 'pass_quick' || call === 'pass_short' || call === 'play_action_short' || call === 'pass_rpo') {
+      completionRate *= dmods.shortCompletionModifier;
+    } else if (call === 'pass_medium') {
+      completionRate *= dmods.mediumCompletionModifier;
+    } else if (call === 'pass_deep' || call === 'play_action_deep') {
+      completionRate *= dmods.deepCompletionModifier;
+    }
+
+    if (call === 'screen_pass') {
+      completionRate *= dmods.screenModifier;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Play-action coverage-specific bonus/penalty
+  // --------------------------------------------------------------------------
+  if (call === 'play_action_short' || call === 'play_action_deep') {
+    if (defensiveCall) {
+      // Man coverage (cover_0, cover_1): play action MORE effective
+      if (defensiveCall.coverage === 'cover_0' || defensiveCall.coverage === 'cover_1') {
+        completionRate += 0.05;
+      }
+      // Zone coverage (cover_3, cover_4): play action LESS effective
+      if (defensiveCall.coverage === 'cover_3' || defensiveCall.coverage === 'cover_4') {
+        completionRate -= 0.03;
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // RPO formation penalty: must be shotgun/pistol for best results
+  // --------------------------------------------------------------------------
+  if (call === 'pass_rpo' && formation) {
+    if (formation !== 'shotgun' && formation !== 'pistol') {
+      completionRate -= 0.03;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Clamp completion rate between reasonable bounds
+  // --------------------------------------------------------------------------
   completionRate = Math.max(0.15, Math.min(0.95, completionRate));
 
   if (rng.probability(completionRate)) {
@@ -523,18 +898,24 @@ function resolvePassPlay(
     // --------------------------------------------------------------------------
     result.type = 'pass_complete';
 
-    const yardDist = AVERAGE_YARDS[call] ?? AVERAGE_YARDS['pass_short'];
+    // Use pass_short yards for checkdowns regardless of the original call
+    let yardDist: YardDistribution;
+    if (isCheckdown) {
+      yardDist = AVERAGE_YARDS['pass_short'];
+    } else {
+      yardDist = getYardDistribution(call, 'pass_short');
+    }
     let yards = rng.gaussian(yardDist.mean, yardDist.stdDev);
 
     // Apply momentum
     yards *= (1 + momentum * MOMENTUM_MAX_EFFECT);
 
     // Apply team ratings
-    const ratingDiff = (offTeam.offenseRating - defTeam.defenseRating) / 100;
-    yards *= (1 + ratingDiff * 0.10);
+    const teamRatingDiff = (offTeam.offenseRating - defTeam.defenseRating) / 100;
+    yards *= (1 + teamRatingDiff * 0.10);
 
     // Big play chance on deep passes
-    if (call === 'pass_deep' && rng.probability(0.08)) {
+    if ((call === 'pass_deep' || call === 'play_action_deep') && rng.probability(0.08)) {
       yards += rng.randomInt(15, 30);
     } else if (rng.probability(BIG_PLAY_RATE)) {
       yards += rng.randomInt(15, 30);
@@ -562,13 +943,28 @@ function resolvePassPlay(
       result.isClockStopped = true;
 
       const recName = receiver ? formatName(receiver) : 'the receiver';
-      result.description =
-        `${formatName(passer)} pass complete to ${recName} for ${result.yardsGained} yards. TOUCHDOWN!`;
+
+      if (call === 'play_action_short' || call === 'play_action_deep') {
+        result.description =
+          `${formatName(passer)} fakes the handoff, fires to ${recName} for ${result.yardsGained} yards. TOUCHDOWN!`;
+      } else {
+        result.description =
+          `${formatName(passer)} pass complete to ${recName} for ${result.yardsGained} yards. TOUCHDOWN!`;
+      }
     } else {
       const posStr = fieldPositionToString(newPosition, state);
       const recName = receiver ? formatName(receiver) : 'the receiver';
-      result.description =
-        `${formatName(passer)} pass complete to ${recName} for ${yards} yard${yards !== 1 ? 's' : ''} to the ${posStr}`;
+
+      if (call === 'play_action_short' || call === 'play_action_deep') {
+        result.description =
+          `${formatName(passer)} fakes the handoff, fires to ${recName} for ${yards} yard${yards !== 1 ? 's' : ''} to the ${posStr}`;
+      } else if (isCheckdown) {
+        result.description =
+          `${formatName(passer)} checks down to ${recName} for ${yards} yard${yards !== 1 ? 's' : ''} to the ${posStr}`;
+      } else {
+        result.description =
+          `${formatName(passer)} pass complete to ${recName} for ${yards} yard${yards !== 1 ? 's' : ''} to the ${posStr}`;
+      }
     }
 
     // Fumble after catch
@@ -673,14 +1069,23 @@ function resolvePassPlay(
       }
     } else {
       // Just an incomplete pass
-      const incompleteDescriptions = [
-        `${formatName(passer)} pass intended for ${recName} falls incomplete`,
-        `${formatName(passer)} throws to ${recName}, pass is incomplete`,
-        `${formatName(passer)} fires toward ${recName}, broken up incomplete`,
-        `${formatName(passer)} looks for ${recName}, the pass sails incomplete`,
-        `${formatName(passer)} pass to ${recName} is knocked away incomplete`,
-      ];
-      result.description = incompleteDescriptions[rng.randomInt(0, incompleteDescriptions.length - 1)];
+      if (call === 'play_action_short' || call === 'play_action_deep') {
+        const paIncompleteDescriptions = [
+          `${formatName(passer)} fakes the handoff, fires toward ${recName}, pass is incomplete`,
+          `${formatName(passer)} play-action fake, throws to ${recName}, falls incomplete`,
+          `${formatName(passer)} with the play fake, looks for ${recName}, the pass sails incomplete`,
+        ];
+        result.description = paIncompleteDescriptions[rng.randomInt(0, paIncompleteDescriptions.length - 1)];
+      } else {
+        const incompleteDescriptions = [
+          `${formatName(passer)} pass intended for ${recName} falls incomplete`,
+          `${formatName(passer)} throws to ${recName}, pass is incomplete`,
+          `${formatName(passer)} fires toward ${recName}, broken up incomplete`,
+          `${formatName(passer)} looks for ${recName}, the pass sails incomplete`,
+          `${formatName(passer)} pass to ${recName} is knocked away incomplete`,
+        ];
+        result.description = incompleteDescriptions[rng.randomInt(0, incompleteDescriptions.length - 1)];
+      }
     }
 
     result.clockElapsed = resolveClockElapsed('pass_incomplete', rng, isTwoMinuteDrill(state));
@@ -1158,19 +1563,33 @@ export function resolvePlay(
   defensePlayers: Player[],
   rng: SeededRNG,
   momentum: number,
+  formation?: Formation,
+  defensiveCall?: DefensiveCall,
 ): PlayResult {
   switch (call) {
     // ---- Run plays ----
     case 'run_inside':
     case 'run_outside':
-      return resolveRunPlay(call, state, offensePlayers, defensePlayers, rng, momentum);
+    case 'run_power':
+    case 'run_zone':
+    case 'run_outside_zone':
+    case 'run_draw':
+    case 'run_counter':
+    case 'run_sweep':
+    case 'run_qb_sneak':
+    case 'run_option':
+      return resolveRunPlay(call, state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall);
 
     // ---- Pass plays ----
+    case 'pass_quick':
     case 'pass_short':
     case 'pass_medium':
     case 'pass_deep':
     case 'screen_pass':
-      return resolvePassPlay(call, state, offensePlayers, defensePlayers, rng, momentum);
+    case 'play_action_short':
+    case 'play_action_deep':
+    case 'pass_rpo':
+      return resolvePassPlay(call, state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall);
 
     // ---- Special teams ----
     case 'punt':
@@ -1203,7 +1622,7 @@ export function resolvePlay(
     default: {
       // Fallback: treat unknown calls as a run play
       const _exhaustiveCheck: never = call;
-      return resolveRunPlay('run_inside', state, offensePlayers, defensePlayers, rng, momentum);
+      return resolveRunPlay('run_inside', state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall);
     }
   }
 }

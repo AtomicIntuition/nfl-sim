@@ -7,9 +7,16 @@
 // (two-minute drill, protect lead, red zone), and finally normal down-and-
 // distance play selection. Team playStyle modifiers shift probabilities to
 // create distinct offensive identities.
+//
+// Play selection is a two-step process:
+//   1. Determine the CATEGORY (run, shortPass, mediumPass, deepPass)
+//      using distribution tables and playStyle modifiers.
+//   2. Expand the category into a specific PlayCall using formation-aware
+//      weighted sub-distributions for run concepts, pass concepts, etc.
 // ============================================================================
 
-import type { GameState, PlayCall, PlayStyle, SeededRNG, WeightedOption } from './types';
+import type { GameState, PlayCall, PlayStyle, Formation, SeededRNG, WeightedOption } from './types';
+import type { PlayDistribution } from './types';
 import {
   PLAY_DISTRIBUTION,
   RED_ZONE_DISTRIBUTION,
@@ -21,7 +28,12 @@ import {
   RED_ZONE,
   TWO_MINUTE_WARNING,
 } from './constants';
-import type { PlayDistribution } from './types';
+
+// ============================================================================
+// Play category type used internally for the two-step selection process
+// ============================================================================
+
+type PlayCategory = 'run' | 'shortPass' | 'mediumPass' | 'deepPass';
 
 // ============================================================================
 // Helper: Get the score differential from the perspective of the possessing team
@@ -102,36 +114,6 @@ function canKneelOutClock(state: GameState): boolean {
 }
 
 // ============================================================================
-// Helper: Convert PlayDistribution to weighted options for rng.weightedChoice
-// Splits run into run_inside/run_outside and adds screen_pass from short pass
-// ============================================================================
-
-function distributionToWeightedOptions(
-  dist: PlayDistribution,
-  rng: SeededRNG,
-): WeightedOption<PlayCall>[] {
-  // Split run: 55% inside, 45% outside
-  const runInsideWeight = dist.run * 0.55;
-  const runOutsideWeight = dist.run * 0.45;
-
-  // Screen pass gets ~10% carved from shortPass when shortPass is significant
-  const screenWeight = dist.shortPass * 0.12;
-  const adjustedShortPass = dist.shortPass - screenWeight;
-
-  const options: WeightedOption<PlayCall>[] = [
-    { value: 'run_inside', weight: runInsideWeight },
-    { value: 'run_outside', weight: runOutsideWeight },
-    { value: 'pass_short', weight: adjustedShortPass },
-    { value: 'pass_medium', weight: dist.mediumPass },
-    { value: 'pass_deep', weight: dist.deepPass },
-    { value: 'screen_pass', weight: screenWeight },
-  ];
-
-  // Filter out zero-weight options
-  return options.filter(o => o.weight > 0);
-}
-
-// ============================================================================
 // Helper: Apply team playStyle modifiers to a distribution
 // ============================================================================
 
@@ -187,10 +169,262 @@ function applyPlayStyleModifiers(
 }
 
 // ============================================================================
+// Step 1: Select a play CATEGORY from a distribution using weighted choice
+// ============================================================================
+
+function selectCategory(dist: PlayDistribution, rng: SeededRNG): PlayCategory {
+  const options: WeightedOption<PlayCategory>[] = [
+    { value: 'run' as const, weight: dist.run },
+    { value: 'shortPass' as const, weight: dist.shortPass },
+    { value: 'mediumPass' as const, weight: dist.mediumPass },
+    { value: 'deepPass' as const, weight: dist.deepPass },
+  ].filter(o => o.weight > 0);
+
+  return rng.weightedChoice(options);
+}
+
+// ============================================================================
+// Step 2: Expand a play category into a specific PlayCall based on formation
+// ============================================================================
+
+// --- Run concept expansion by formation ---
+
+function expandRunCategory(
+  formation: Formation | undefined,
+  yardsToGo: number,
+  rng: SeededRNG,
+): PlayCall {
+  let options: WeightedOption<PlayCall>[];
+
+  switch (formation) {
+    case 'under_center':
+    case 'i_formation':
+    case 'goal_line': {
+      const sneakWeight = yardsToGo <= 1 ? 20 : 0;
+      const insideWeight = sneakWeight > 0 ? 0 : 20;
+      options = [
+        { value: 'run_power', weight: 35 },
+        { value: 'run_zone', weight: 25 },
+        { value: 'run_counter', weight: 20 },
+        { value: 'run_qb_sneak', weight: sneakWeight },
+        { value: 'run_inside', weight: insideWeight },
+      ];
+      break;
+    }
+
+    case 'shotgun':
+    case 'pistol':
+      options = [
+        { value: 'run_zone', weight: 30 },
+        { value: 'run_draw', weight: 20 },
+        { value: 'run_option', weight: 20 },
+        { value: 'run_outside_zone', weight: 15 },
+        { value: 'run_sweep', weight: 15 },
+      ];
+      break;
+
+    case 'spread':
+    case 'empty':
+      options = [
+        { value: 'run_draw', weight: 35 },
+        { value: 'run_sweep', weight: 25 },
+        { value: 'run_option', weight: 25 },
+        { value: 'run_outside_zone', weight: 15 },
+      ];
+      break;
+
+    case 'singleback':
+      options = [
+        { value: 'run_zone', weight: 25 },
+        { value: 'run_power', weight: 25 },
+        { value: 'run_outside_zone', weight: 20 },
+        { value: 'run_counter', weight: 15 },
+        { value: 'run_sweep', weight: 15 },
+      ];
+      break;
+
+    case 'wildcat':
+      options = [
+        { value: 'run_option', weight: 40 },
+        { value: 'run_sweep', weight: 30 },
+        { value: 'run_power', weight: 20 },
+        { value: 'run_counter', weight: 10 },
+      ];
+      break;
+
+    default:
+      // No formation provided -- use legacy-compatible defaults
+      options = [
+        { value: 'run_inside', weight: 30 },
+        { value: 'run_outside', weight: 25 },
+        { value: 'run_power', weight: 20 },
+        { value: 'run_zone', weight: 15 },
+        { value: 'run_draw', weight: 10 },
+      ];
+      break;
+  }
+
+  return rng.weightedChoice(options.filter(o => o.weight > 0));
+}
+
+// --- Short pass concept expansion by formation ---
+
+function expandShortPassCategory(
+  formation: Formation | undefined,
+  rng: SeededRNG,
+): PlayCall {
+  // Determine if play action should replace some pass_short weight
+  const isPlayActionFormation =
+    formation === 'under_center' ||
+    formation === 'i_formation' ||
+    formation === 'pistol';
+
+  // Determine if RPO is available (shotgun/pistol)
+  const isRPOFormation =
+    formation === 'shotgun' ||
+    formation === 'pistol';
+
+  // Base weights
+  let quickWeight = 40;
+  let shortWeight = 35;
+  const screenWeight = 15;
+  let rpoWeight = 0;
+  let playActionShortWeight = 0;
+
+  if (isRPOFormation) {
+    rpoWeight = 10;
+    // Carve RPO weight from short
+    shortWeight -= rpoWeight;
+  }
+
+  if (isPlayActionFormation) {
+    // Play action replaces 30% of pass_short weight
+    playActionShortWeight = Math.round(shortWeight * 0.30);
+    shortWeight -= playActionShortWeight;
+  }
+
+  const options: WeightedOption<PlayCall>[] = [
+    { value: 'pass_quick', weight: quickWeight },
+    { value: 'pass_short', weight: shortWeight },
+    { value: 'screen_pass', weight: screenWeight },
+    { value: 'pass_rpo', weight: rpoWeight },
+    { value: 'play_action_short', weight: playActionShortWeight },
+  ];
+
+  return rng.weightedChoice(options.filter(o => o.weight > 0));
+}
+
+// --- Medium pass concept expansion by formation ---
+
+function expandMediumPassCategory(
+  formation: Formation | undefined,
+  rng: SeededRNG,
+): PlayCall {
+  const isPlayActionFormation =
+    formation === 'under_center' ||
+    formation === 'i_formation' ||
+    formation === 'pistol' ||
+    formation === 'singleback';
+
+  let mediumWeight = 60;
+  let playActionShortWeight = 0;
+  let shortFillWeight = 0;
+
+  if (isPlayActionFormation) {
+    playActionShortWeight = 25;
+    // Remaining weight goes to pass_medium (already at 60) and fill
+    shortFillWeight = 15;
+  } else {
+    // No play action available -- redistribute to pass_short as filler
+    shortFillWeight = 40;
+  }
+
+  const options: WeightedOption<PlayCall>[] = [
+    { value: 'pass_medium', weight: mediumWeight },
+    { value: 'play_action_short', weight: playActionShortWeight },
+    { value: 'pass_short', weight: shortFillWeight },
+  ];
+
+  return rng.weightedChoice(options.filter(o => o.weight > 0));
+}
+
+// --- Deep pass concept expansion by formation ---
+
+function expandDeepPassCategory(
+  formation: Formation | undefined,
+  rng: SeededRNG,
+): PlayCall {
+  const isPlayActionFormation =
+    formation === 'under_center' ||
+    formation === 'i_formation' ||
+    formation === 'pistol';
+
+  const deepWeight = 55;
+  let playActionDeepWeight: number;
+  let mediumFillWeight: number;
+
+  if (isPlayActionFormation) {
+    playActionDeepWeight = 30;
+    mediumFillWeight = 15;
+  } else {
+    playActionDeepWeight = 10;
+    mediumFillWeight = 35;
+  }
+
+  const options: WeightedOption<PlayCall>[] = [
+    { value: 'pass_deep', weight: deepWeight },
+    { value: 'play_action_deep', weight: playActionDeepWeight },
+    { value: 'pass_medium', weight: mediumFillWeight },
+  ];
+
+  return rng.weightedChoice(options.filter(o => o.weight > 0));
+}
+
+// ============================================================================
+// Expand: Given a category and formation, pick a specific PlayCall
+// ============================================================================
+
+function expandCategoryToPlayCall(
+  category: PlayCategory,
+  formation: Formation | undefined,
+  yardsToGo: number,
+  rng: SeededRNG,
+): PlayCall {
+  switch (category) {
+    case 'run':
+      return expandRunCategory(formation, yardsToGo, rng);
+    case 'shortPass':
+      return expandShortPassCategory(formation, rng);
+    case 'mediumPass':
+      return expandMediumPassCategory(formation, rng);
+    case 'deepPass':
+      return expandDeepPassCategory(formation, rng);
+  }
+}
+
+// ============================================================================
+// Helper: Select distribution, pick category, then expand to PlayCall
+// ============================================================================
+
+function selectFromDistribution(
+  dist: PlayDistribution,
+  formation: Formation | undefined,
+  yardsToGo: number,
+  rng: SeededRNG,
+): PlayCall {
+  const category = selectCategory(dist, rng);
+  return expandCategoryToPlayCall(category, formation, yardsToGo, rng);
+}
+
+// ============================================================================
 // Main: selectPlay
 // ============================================================================
 
-export function selectPlay(state: GameState, rng: SeededRNG): PlayCall {
+export function selectPlay(
+  state: GameState,
+  rng: SeededRNG,
+  formation?: Formation,
+): PlayCall {
   const scoreDiff = getScoreDifferential(state);
   const team = getPossessingTeam(state);
 
@@ -308,7 +542,7 @@ export function selectPlay(state: GameState, rng: SeededRNG): PlayCall {
     (scoreDiff <= 0 || (scoreDiff > 0 && scoreDiff <= 8))
   ) {
     const dist = applyPlayStyleModifiers(TWO_MINUTE_DRILL_DISTRIBUTION, team.playStyle);
-    return rng.weightedChoice(distributionToWeightedOptions(dist, rng));
+    return selectFromDistribution(dist, formation, state.yardsToGo, rng);
   }
 
   // --------------------------------------------------------------------------
@@ -316,7 +550,7 @@ export function selectPlay(state: GameState, rng: SeededRNG): PlayCall {
   // --------------------------------------------------------------------------
   if (isFourthQuarter(state) && scoreDiff >= 10 && state.clock < 300) {
     const dist = applyPlayStyleModifiers(PROTECT_LEAD_DISTRIBUTION, team.playStyle);
-    return rng.weightedChoice(distributionToWeightedOptions(dist, rng));
+    return selectFromDistribution(dist, formation, state.yardsToGo, rng);
   }
 
   // --------------------------------------------------------------------------
@@ -325,12 +559,12 @@ export function selectPlay(state: GameState, rng: SeededRNG): PlayCall {
   if (state.ballPosition >= 95) {
     // Goal line package
     const dist = applyPlayStyleModifiers(GOAL_LINE_DISTRIBUTION, team.playStyle);
-    return rng.weightedChoice(distributionToWeightedOptions(dist, rng));
+    return selectFromDistribution(dist, formation, state.yardsToGo, rng);
   }
 
   if (state.ballPosition >= RED_ZONE) {
     const dist = applyPlayStyleModifiers(RED_ZONE_DISTRIBUTION, team.playStyle);
-    return rng.weightedChoice(distributionToWeightedOptions(dist, rng));
+    return selectFromDistribution(dist, formation, state.yardsToGo, rng);
   }
 
   // --------------------------------------------------------------------------
@@ -349,7 +583,7 @@ export function selectPlay(state: GameState, rng: SeededRNG): PlayCall {
   // Look up distribution, fall back to 1_standard if key not found
   const baseDist = PLAY_DISTRIBUTION[key] ?? PLAY_DISTRIBUTION['1_standard'];
   const dist = applyPlayStyleModifiers(baseDist, team.playStyle);
-  return rng.weightedChoice(distributionToWeightedOptions(dist, rng));
+  return selectFromDistribution(dist, formation, state.yardsToGo, rng);
 }
 
 // ============================================================================
@@ -359,24 +593,30 @@ export function selectPlay(state: GameState, rng: SeededRNG): PlayCall {
 function selectGoForItPlay(state: GameState, rng: SeededRNG): PlayCall {
   if (state.yardsToGo <= 1) {
     // Quarterback sneak / power run territory
-    return rng.probability(0.70) ? 'run_inside' : 'pass_short';
+    return rng.weightedChoice<PlayCall>([
+      { value: 'run_qb_sneak', weight: 50 },
+      { value: 'run_power', weight: 30 },
+      { value: 'pass_quick', weight: 20 },
+    ]);
   }
 
   if (state.yardsToGo <= 3) {
-    // Short yardage: mix of run and short pass
+    // Short yardage: mix of power run and quick passes
     return rng.weightedChoice<PlayCall>([
-      { value: 'run_inside', weight: 40 },
-      { value: 'run_outside', weight: 15 },
-      { value: 'pass_short', weight: 30 },
-      { value: 'pass_medium', weight: 15 },
+      { value: 'run_power', weight: 25 },
+      { value: 'run_zone', weight: 20 },
+      { value: 'pass_quick', weight: 25 },
+      { value: 'pass_short', weight: 20 },
+      { value: 'screen_pass', weight: 10 },
     ]);
   }
 
   // Medium/long 4th down: pass-heavy
   return rng.weightedChoice<PlayCall>([
-    { value: 'pass_short', weight: 30 },
-    { value: 'pass_medium', weight: 40 },
+    { value: 'pass_short', weight: 25 },
+    { value: 'pass_medium', weight: 35 },
     { value: 'pass_deep', weight: 20 },
     { value: 'screen_pass', weight: 10 },
+    { value: 'pass_quick', weight: 10 },
   ]);
 }
