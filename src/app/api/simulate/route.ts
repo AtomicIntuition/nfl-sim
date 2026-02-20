@@ -14,6 +14,7 @@ import { eq, and, desc, asc } from 'drizzle-orm';
 import { generateSeasonSchedule } from '@/lib/scheduling/schedule-generator';
 import { calculatePlayoffSeeds } from '@/lib/scheduling/playoff-manager';
 import { simulateGame } from '@/lib/simulation/engine';
+import { ESTIMATED_GAME_SLOT_MS } from '@/lib/simulation/constants';
 import type {
   Team,
   Player as SimPlayer,
@@ -203,18 +204,8 @@ async function determineNextAction(): Promise<SimAction> {
           );
         }
 
-        // Set scheduledAt for the next game (completedAt + 15min intermission)
-        const completedAt = new Date();
-        const nextScheduled = weekGames.find(
-          (g) => g.status === 'scheduled' && g.id !== activeGame.id
-        );
-        if (nextScheduled) {
-          const nextTime = new Date(completedAt.getTime() + 15 * 60 * 1000);
-          await db
-            .update(games)
-            .set({ scheduledAt: nextTime })
-            .where(eq(games.id, nextScheduled.id));
-        }
+        // Re-project future game times from this completion point
+        await projectFutureGameTimes(season.id);
 
         // Fall through to find next action
       } else {
@@ -413,8 +404,8 @@ async function handleCreateSeason() {
       .where(eq(games.id, featuredId));
   }
 
-  // Estimate game times for week 1 (first game starts now)
-  await estimateWeekGameTimes(seasonId, 1, new Date());
+  // Project game times for the entire season
+  await projectFutureGameTimes(seasonId);
 
   // Initialize standings for all teams
   const standingsValues = allTeams.map((team) => ({
@@ -614,7 +605,7 @@ async function handleAdvanceWeek(seasonId: string) {
 
     // Generate Wild Card games based on standings
     const gamesCreated = await generateWildCardGames(seasonId);
-    await estimateWeekGameTimes(seasonId, 19, new Date());
+    await projectFutureGameTimes(seasonId);
 
     return {
       previousWeek: season.currentWeek,
@@ -635,7 +626,7 @@ async function handleAdvanceWeek(seasonId: string) {
       .where(eq(seasons.id, seasonId));
 
     const gamesCreated = await generateDivisionalGames(seasonId);
-    await estimateWeekGameTimes(seasonId, 20, new Date());
+    await projectFutureGameTimes(seasonId);
 
     return {
       previousWeek: 19,
@@ -656,7 +647,7 @@ async function handleAdvanceWeek(seasonId: string) {
       .where(eq(seasons.id, seasonId));
 
     const gamesCreated = await generateConferenceChampionshipGames(seasonId);
-    await estimateWeekGameTimes(seasonId, 21, new Date());
+    await projectFutureGameTimes(seasonId);
 
     return {
       previousWeek: 20,
@@ -677,7 +668,7 @@ async function handleAdvanceWeek(seasonId: string) {
       .where(eq(seasons.id, seasonId));
 
     const gamesCreated = await generateSuperBowlGame(seasonId);
-    await estimateWeekGameTimes(seasonId, 22, new Date());
+    await projectFutureGameTimes(seasonId);
 
     return {
       previousWeek: 21,
@@ -719,8 +710,8 @@ async function handleAdvanceWeek(seasonId: string) {
     }
   }
 
-  // Estimate game times for the new week (starting now)
-  await estimateWeekGameTimes(seasonId, nextWeek, new Date());
+  // Re-project future game times
+  await projectFutureGameTimes(seasonId);
 
   return {
     previousWeek: season.currentWeek,
@@ -1271,7 +1262,7 @@ async function updateStandings(
 
 /**
  * Sets `scheduledAt` for all scheduled games in a given week.
- * Each game is spaced 20 minutes apart starting from `startTime`.
+ * Each game is spaced by ESTIMATED_GAME_SLOT_MS (95 min) starting from `startTime`.
  */
 async function estimateWeekGameTimes(
   seasonId: string,
@@ -1290,11 +1281,96 @@ async function estimateWeekGameTimes(
     );
 
   for (let i = 0; i < weekGames.length; i++) {
-    const scheduledAt = new Date(startTime.getTime() + i * 20 * 60 * 1000);
+    const scheduledAt = new Date(startTime.getTime() + i * ESTIMATED_GAME_SLOT_MS);
     await db
       .update(games)
       .set({ scheduledAt })
       .where(eq(games.id, weekGames[i].id));
+  }
+}
+
+/**
+ * Projects scheduledAt for ALL future games in the season.
+ * Chains from the last known anchor (completed game's completedAt,
+ * broadcasting game's estimated end, or current time).
+ * Games within a week are spaced by ESTIMATED_GAME_SLOT_MS (95 min).
+ * A 30-minute break separates the last game of one week from the first of the next.
+ */
+async function projectFutureGameTimes(seasonId: string) {
+  const WEEK_BREAK_MS = 30 * 60 * 1000;
+
+  // Get season info
+  const seasonRows = await db
+    .select()
+    .from(seasons)
+    .where(eq(seasons.id, seasonId))
+    .limit(1);
+  if (seasonRows.length === 0) return;
+  const season = seasonRows[0];
+
+  // Get all games ordered by week then by existing scheduledAt
+  const allGames = await db
+    .select()
+    .from(games)
+    .where(eq(games.seasonId, seasonId))
+    .orderBy(asc(games.week), asc(games.scheduledAt));
+
+  // Find the anchor: last completed/broadcasting game
+  let anchor = Date.now();
+
+  // Check for a broadcasting game — anchor is its estimated end
+  const broadcasting = allGames.find((g) => g.status === 'broadcasting');
+  if (broadcasting?.broadcastStartedAt) {
+    // Estimate end = broadcast start + game slot
+    anchor = new Date(broadcasting.broadcastStartedAt).getTime() + ESTIMATED_GAME_SLOT_MS;
+  } else {
+    // Find last completed game
+    const completed = allGames
+      .filter((g) => g.status === 'completed' && g.completedAt)
+      .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime());
+    if (completed.length > 0) {
+      const lastCompleted = completed[0];
+      // Anchor = completedAt + intermission (15 min)
+      anchor = lastCompleted.completedAt!.getTime() + 15 * 60 * 1000;
+    }
+  }
+
+  // Only project for scheduled games
+  const scheduled = allGames.filter((g) => g.status === 'scheduled');
+  if (scheduled.length === 0) return;
+
+  // Group scheduled games by week
+  const byWeek = new Map<number, typeof scheduled>();
+  for (const g of scheduled) {
+    const weekGames = byWeek.get(g.week) ?? [];
+    weekGames.push(g);
+    byWeek.set(g.week, weekGames);
+  }
+
+  // Sort weeks
+  const weeks = [...byWeek.keys()].sort((a, b) => a - b);
+
+  let cursor = anchor;
+  let isFirstWeek = true;
+
+  for (const week of weeks) {
+    // Add week break before weeks that are after the anchor week
+    if (!isFirstWeek) {
+      cursor += WEEK_BREAK_MS;
+    }
+    isFirstWeek = false;
+
+    const weekGames = byWeek.get(week)!;
+    for (let i = 0; i < weekGames.length; i++) {
+      const scheduledAt = new Date(cursor + i * ESTIMATED_GAME_SLOT_MS);
+      await db
+        .update(games)
+        .set({ scheduledAt })
+        .where(eq(games.id, weekGames[i].id));
+    }
+
+    // Move cursor past the last game in this week
+    cursor += weekGames.length * ESTIMATED_GAME_SLOT_MS;
   }
 }
 

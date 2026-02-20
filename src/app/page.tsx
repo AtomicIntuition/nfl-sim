@@ -16,6 +16,7 @@ import {
 import { ROUTES } from '@/lib/utils/constants';
 import { LiveScore } from '@/components/game/live-score';
 import { IntermissionCountdown } from '@/components/game/intermission-countdown';
+import { KickoffCountdown } from '@/components/game/kickoff-countdown';
 import { TeamLogo } from '@/components/team/team-logo';
 import { ScoreTicker } from '@/components/game/score-ticker';
 import { HomeAutoRefresh } from '@/components/home/home-auto-refresh';
@@ -79,7 +80,19 @@ async function getHomePageData() {
       .map(hydrateGame)
   );
 
-  // Get top standings for quick snapshot
+  // "Coming Up" — remaining scheduled games this week (excluding the featured next game)
+  const upcomingScheduled = weekGames
+    .filter((g) => g.status === 'scheduled' && g.id !== nextGame?.id)
+    .sort((a, b) => {
+      const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : Infinity;
+      const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : Infinity;
+      return aTime - bTime;
+    })
+    .slice(0, 12);
+
+  const comingUpGames = await Promise.all(upcomingScheduled.map(hydrateGame));
+
+  // Get ALL standings for division-grouped display
   const standingRows = await db
     .select()
     .from(standings)
@@ -92,13 +105,10 @@ async function getHomePageData() {
     teamMap.set(t.id, t);
   }
 
-  const hydratedStandings = standingRows
-    .map((s) => ({
-      ...s,
-      team: teamMap.get(s.teamId) ?? null,
-    }))
-    .sort((a, b) => (b.wins ?? 0) - (a.wins ?? 0))
-    .slice(0, 8);
+  const hydratedStandings = standingRows.map((s) => ({
+    ...s,
+    team: teamMap.get(s.teamId) ?? null,
+  }));
 
   // Week progress
   const completedCount = weekGames.filter(
@@ -202,12 +212,26 @@ async function getHomePageData() {
     liveGame: hydratedLive,
     nextGame: hydratedNext,
     completedGames: completedGames.filter(Boolean),
+    comingUpGames: comingUpGames.filter(Boolean),
     standings: hydratedStandings,
     weekProgress: { completed: completedCount, total: totalCount },
     isLive: !!liveGame,
     intermission,
     weekBreak,
   };
+}
+
+// ============================================================
+// Helper: format time for Coming Up cards
+// ============================================================
+
+function formatKickoffTime(scheduledAt: Date): string {
+  return scheduledAt.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
 }
 
 // ============================================================
@@ -247,9 +271,12 @@ export default async function HomePage() {
   }
 
   const {
-    season, liveGame, nextGame, completedGames, standings,
+    season, liveGame, nextGame, completedGames, comingUpGames, standings,
     weekProgress, isLive, intermission, weekBreak,
   } = data;
+
+  // Group standings by conference and division
+  const divisionStandings = groupByDivision(standings);
 
   return (
     <>
@@ -316,6 +343,42 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* ---- Quick Nav ---- */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 -mt-4 mb-6 relative z-10">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {isLive && liveGame && (
+              <Link
+                href={ROUTES.GAME(liveGame.id)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-live-red text-white text-xs font-bold rounded-full whitespace-nowrap shadow-lg shadow-live-red/20"
+              >
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                </span>
+                Watch Live
+              </Link>
+            )}
+            <Link
+              href={ROUTES.SCHEDULE}
+              className="inline-flex items-center px-4 py-2 bg-surface-elevated text-text-secondary text-xs font-bold rounded-full whitespace-nowrap border border-border hover:border-border-bright transition-colors"
+            >
+              Schedule
+            </Link>
+            <Link
+              href={ROUTES.SCHEDULE}
+              className="inline-flex items-center px-4 py-2 bg-surface-elevated text-text-secondary text-xs font-bold rounded-full whitespace-nowrap border border-border hover:border-border-bright transition-colors"
+            >
+              Standings
+            </Link>
+            <Link
+              href={ROUTES.LEADERBOARD}
+              className="inline-flex items-center px-4 py-2 bg-surface-elevated text-text-secondary text-xs font-bold rounded-full whitespace-nowrap border border-border hover:border-border-bright transition-colors"
+            >
+              Predictions
+            </Link>
+          </div>
+        </section>
+
         {/* ---- Score Ticker ---- */}
         {completedGames.length > 0 && (
           <ScoreTicker
@@ -343,11 +406,76 @@ export default async function HomePage() {
           />
         )}
 
-        {/* ---- Quick Standings ---- */}
+        {/* ---- Coming Up ---- */}
+        {comingUpGames.length > 0 && (
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-text-primary tracking-wide">
+                Coming Up This Week
+              </h2>
+              <Link
+                href={ROUTES.SCHEDULE}
+                className="text-sm font-medium text-gold hover:text-gold-bright transition-colors"
+              >
+                Full Schedule &rarr;
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {comingUpGames.map((g) => {
+                if (!g) return null;
+                const kickoffTime = g.scheduledAt
+                  ? formatKickoffTime(new Date(g.scheduledAt))
+                  : null;
+                return (
+                  <Link key={g.id} href={ROUTES.GAME(g.id)}>
+                    <Card
+                      variant="default"
+                      padding="sm"
+                      className="hover:border-gold/30 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <TeamLogo
+                            abbreviation={g.awayTeam?.abbreviation ?? '???'}
+                            teamName={g.awayTeam?.name ?? undefined}
+                            size={24}
+                            className="w-6 h-6 object-contain shrink-0"
+                          />
+                          <span className="text-xs font-bold">
+                            {g.awayTeam?.abbreviation ?? '???'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-text-muted font-medium">@</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold">
+                            {g.homeTeam?.abbreviation ?? '???'}
+                          </span>
+                          <TeamLogo
+                            abbreviation={g.homeTeam?.abbreviation ?? '???'}
+                            teamName={g.homeTeam?.name ?? undefined}
+                            size={24}
+                            className="w-6 h-6 object-contain shrink-0"
+                          />
+                        </div>
+                      </div>
+                      {kickoffTime && (
+                        <p className="text-[10px] text-text-muted text-center mt-1.5">
+                          est. {kickoffTime}
+                        </p>
+                      )}
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ---- Division Standings ---- */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-text-primary tracking-wide">
-              Top Teams
+              Standings
             </h2>
             <Link
               href={ROUTES.SCHEDULE}
@@ -357,55 +485,45 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {standings.map((s, idx) => (
-              <Link
-                key={s.teamId}
-                href={ROUTES.TEAM(s.teamId)}
-              >
-                <Card
-                  variant="default"
-                  padding="sm"
-                  className="hover:border-border-bright transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-text-muted w-5">
-                      {idx + 1}
-                    </span>
-                    <TeamLogo
-                      abbreviation={s.team?.abbreviation ?? '???'}
-                      teamName={s.team?.name ?? undefined}
-                      size={36}
-                      className="w-9 h-9 object-contain flex-shrink-0"
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* AFC */}
+            <div>
+              <h3 className="text-sm font-bold text-text-secondary tracking-wider uppercase mb-4">
+                AFC
+              </h3>
+              <div className="space-y-4">
+                {['North', 'South', 'East', 'West'].map((div) => {
+                  const divTeams = divisionStandings.AFC?.[div] ?? [];
+                  if (divTeams.length === 0) return null;
+                  return (
+                    <DivisionBlock
+                      key={`AFC-${div}`}
+                      divisionName={`AFC ${div}`}
+                      teams={divTeams}
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate">
-                        {s.team?.city ?? 'Unknown'} {s.team?.mascot ?? ''}
-                      </p>
-                      <p className="text-xs text-text-muted">
-                        {s.team?.conference ?? ''} {s.team?.division ?? ''}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold font-mono tabular-nums">
-                        {formatRecord(s.wins ?? 0, s.losses ?? 0, s.ties ?? 0)}
-                      </p>
-                      {s.streak && s.streak !== 'W0' && (
-                        <p
-                          className={`text-[10px] font-bold ${
-                            s.streak?.startsWith('W')
-                              ? 'text-success'
-                              : 'text-danger'
-                          }`}
-                        >
-                          {s.streak}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              </Link>
-            ))}
+                  );
+                })}
+              </div>
+            </div>
+            {/* NFC */}
+            <div>
+              <h3 className="text-sm font-bold text-text-secondary tracking-wider uppercase mb-4">
+                NFC
+              </h3>
+              <div className="space-y-4">
+                {['North', 'South', 'East', 'West'].map((div) => {
+                  const divTeams = divisionStandings.NFC?.[div] ?? [];
+                  if (divTeams.length === 0) return null;
+                  return (
+                    <DivisionBlock
+                      key={`NFC-${div}`}
+                      divisionName={`NFC ${div}`}
+                      teams={divTeams}
+                    />
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -453,11 +571,56 @@ export default async function HomePage() {
 }
 
 // ============================================================
+// Helpers
+// ============================================================
+
+type StandingWithTeam = {
+  teamId: string;
+  wins: number | null;
+  losses: number | null;
+  ties: number | null;
+  streak: string | null;
+  team: {
+    id: string;
+    name: string;
+    abbreviation: string;
+    city: string;
+    mascot: string;
+    conference: string;
+    division: string;
+    primaryColor: string;
+    secondaryColor: string;
+  } | null;
+};
+
+function groupByDivision(standings: StandingWithTeam[]) {
+  const result: Record<string, Record<string, StandingWithTeam[]>> = {};
+
+  for (const s of standings) {
+    const conf = s.team?.conference ?? 'Unknown';
+    const div = s.team?.division ?? 'Unknown';
+    if (!result[conf]) result[conf] = {};
+    if (!result[conf][div]) result[conf][div] = [];
+    result[conf][div].push(s);
+  }
+
+  // Sort each division by wins desc
+  for (const conf of Object.keys(result)) {
+    for (const div of Object.keys(result[conf])) {
+      result[conf][div].sort((a, b) => (b.wins ?? 0) - (a.wins ?? 0));
+    }
+  }
+
+  return result;
+}
+
+// ============================================================
 // Sub-components
 // ============================================================
 
 interface GameCardData {
   id: string;
+  scheduledAt?: Date | null;
   homeTeam: {
     id: string;
     name: string;
@@ -481,6 +644,46 @@ interface GameCardData {
   status: string;
   isFeatured: boolean | null;
   gameType: string;
+}
+
+function DivisionBlock({
+  divisionName,
+  teams,
+}: {
+  divisionName: string;
+  teams: StandingWithTeam[];
+}) {
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="px-3 py-1.5 bg-surface-elevated border-b border-border">
+        <span className="text-[10px] font-bold text-text-muted tracking-wider uppercase">
+          {divisionName}
+        </span>
+      </div>
+      <div className="divide-y divide-border/50">
+        {teams.map((s, idx) => (
+          <Link
+            key={s.teamId}
+            href={ROUTES.TEAM(s.teamId)}
+            className="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-elevated/50 transition-colors"
+          >
+            <TeamLogo
+              abbreviation={s.team?.abbreviation ?? '???'}
+              teamName={s.team?.name ?? undefined}
+              size={24}
+              className="w-6 h-6 object-contain shrink-0"
+            />
+            <span className={`text-xs font-bold flex-1 truncate ${idx === 0 ? 'text-gold' : 'text-text-primary'}`}>
+              {s.team?.abbreviation ?? '???'}
+            </span>
+            <span className="text-xs font-mono font-bold tabular-nums text-text-secondary">
+              {formatRecord(s.wins ?? 0, s.losses ?? 0, s.ties ?? 0)}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function LiveGameHero({ game }: { game: GameCardData }) {
@@ -758,12 +961,18 @@ function NextGameHero({ game }: { game: GameCardData }) {
             </p>
           </div>
 
-          {/* VS */}
+          {/* VS + countdown */}
           <div className="text-center">
             <p className="text-3xl sm:text-5xl font-black text-text-muted">VS</p>
-            <p className="text-xs text-text-muted mt-2 tracking-wider uppercase">
-              Kickoff Soon
-            </p>
+            {game.scheduledAt ? (
+              <div className="mt-3">
+                <KickoffCountdown scheduledAt={new Date(game.scheduledAt).toISOString()} />
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted mt-2 tracking-wider uppercase">
+                Kickoff Soon
+              </p>
+            )}
           </div>
 
           {/* Home team */}

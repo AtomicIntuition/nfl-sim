@@ -513,6 +513,40 @@ export const PLAY_DELAY_BETWEEN_QUARTERS = 8000;
 export const PLAY_DELAY_HALFTIME = 15000;
 
 // ============================================================================
+// REAL-TIME GAME PACING (for authentic ~60-80 minute broadcast)
+// ============================================================================
+// These control SSE delays that map to actual game-time consumption,
+// producing an authentic broadcast experience instead of a 5-minute highlight reel.
+// ============================================================================
+
+/** Real-time delay when the clock is stopped (huddle + lineup time) */
+export const REALTIME_PLAY_CLOCK_DELAY_MS = 20_000;
+
+/** Faster play clock during two-minute drill / hurry-up */
+export const REALTIME_TWO_MINUTE_PLAY_CLOCK_MS = 12_000;
+
+/** Pause between quarters (Q1→Q2, Q3→Q4) */
+export const REALTIME_QUARTER_BREAK_MS = 60_000;
+
+/** Halftime break */
+export const REALTIME_HALFTIME_MS = 300_000;
+
+/** Pause for the two-minute warning */
+export const REALTIME_TWO_MINUTE_WARNING_MS = 30_000;
+
+/** Extra celebration pause after a touchdown */
+export const REALTIME_TOUCHDOWN_BONUS_MS = 5_000;
+
+/** Dramatic pause after a turnover */
+export const REALTIME_TURNOVER_BONUS_MS = 3_000;
+
+/** Estimated total game duration including all delays (~80 min) */
+export const ESTIMATED_GAME_DURATION_MS = 80 * 60 * 1000;
+
+/** Estimated game slot including post-game intermission (~95 min) */
+export const ESTIMATED_GAME_SLOT_MS = 95 * 60 * 1000;
+
+// ============================================================================
 // SCORING DISTRIBUTION TARGETS (for validation / regression testing)
 // ============================================================================
 // These are not used in simulation logic directly, but serve as

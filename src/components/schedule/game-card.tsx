@@ -8,14 +8,32 @@ interface GameCardProps {
   game: ScheduledGame;
 }
 
-function formatEST(date: Date): string {
-  return date.toLocaleString('en-US', {
+function formatRelativeDate(date: Date): string {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  const timeStr = date.toLocaleString('en-US', {
     timeZone: 'America/New_York',
-    weekday: 'short',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
-  }) + ' EST';
+  });
+
+  if (diffDays === 0) return `Today ${timeStr}`;
+  if (diffDays === 1) return `Tomorrow ${timeStr}`;
+  if (diffDays > 1 && diffDays <= 6) {
+    const weekday = date.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long' });
+    return `${weekday} ${timeStr}`;
+  }
+
+  const dateStr = date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'short',
+    day: 'numeric',
+  });
+  return `${dateStr} ${timeStr}`;
 }
 
 function getGameTimeLabel(game: ScheduledGame): string | null {
@@ -23,10 +41,10 @@ function getGameTimeLabel(game: ScheduledGame): string | null {
     return 'LIVE NOW';
   }
   if (game.status === 'completed' && game.broadcastStartedAt) {
-    return formatEST(new Date(game.broadcastStartedAt));
+    return formatRelativeDate(new Date(game.broadcastStartedAt));
   }
   if (game.status === 'scheduled' && game.scheduledAt) {
-    return formatEST(new Date(game.scheduledAt));
+    return `est. ${formatRelativeDate(new Date(game.scheduledAt))}`;
   }
   return null;
 }

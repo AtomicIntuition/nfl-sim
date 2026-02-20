@@ -220,8 +220,8 @@ export async function GET(
               delayMs = Math.max(0, event.displayTimestamp - lastTimestamp);
             }
 
-            // Cap the max delay to prevent extraordinarily long waits
-            delayMs = Math.min(delayMs, 10_000);
+            // Cap the max delay — real-time pacing means run plays can take 40s+
+            delayMs = Math.min(delayMs, 45_000);
 
             if (delayMs > 0) {
               const alive = await sleep(delayMs);

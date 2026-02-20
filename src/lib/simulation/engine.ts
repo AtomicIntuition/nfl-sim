@@ -46,6 +46,7 @@ import { resolvePlay } from './play-generator';
 import {
   advanceClock,
   getHalftimeTimeoutReset,
+  type ClockUpdate,
 } from './clock-manager';
 
 // --- Penalties ---
@@ -109,13 +110,14 @@ import { createStoryState, updateStoryState, getActiveThreads } from '../narrati
 import {
   QUARTER_LENGTH,
   TOUCHBACK_POSITION,
+  REALTIME_PLAY_CLOCK_DELAY_MS,
+  REALTIME_TWO_MINUTE_PLAY_CLOCK_MS,
+  REALTIME_QUARTER_BREAK_MS,
+  REALTIME_HALFTIME_MS,
+  REALTIME_TWO_MINUTE_WARNING_MS,
+  REALTIME_TOUCHDOWN_BONUS_MS,
+  REALTIME_TURNOVER_BONUS_MS,
   PLAY_DELAY_NORMAL,
-  PLAY_DELAY_TWO_MINUTE,
-  PLAY_DELAY_AFTER_TOUCHDOWN,
-  PLAY_DELAY_AFTER_TURNOVER,
-  PLAY_DELAY_CLUTCH,
-  PLAY_DELAY_BETWEEN_QUARTERS,
-  PLAY_DELAY_HALFTIME,
 } from './constants';
 
 // ============================================================================
@@ -210,21 +212,53 @@ function buildTemplateCommentary(
   };
 }
 
-/** Calculate the playback timestamp delay for a play. */
+/**
+ * Calculate the real-time playback delay for a play event.
+ *
+ * Instead of fixed 2-6 second delays, this maps actual game clock
+ * consumption to real broadcast time, producing ~60-80 minute games.
+ *
+ * Logic:
+ *   - Halftime → 5 minutes
+ *   - Quarter break → 1 minute
+ *   - Clock running → play.clockElapsed seconds (converted to ms)
+ *   - Clock stopped → 20s huddle/lineup delay (12s in two-minute drill)
+ *   - Bonus: +5s for TDs, +3s for turnovers
+ */
 function calculatePlayDelay(
   play: PlayResult,
   state: GameState,
   drama: { isClutchMoment: boolean; isTwoMinuteDrill: boolean },
   isQuarterChange: boolean,
   isHalftime: boolean,
+  clockUpdate: { isClockRunning: boolean; twoMinuteWarning: boolean } | null,
 ): number {
-  if (isHalftime) return PLAY_DELAY_HALFTIME;
-  if (isQuarterChange) return PLAY_DELAY_BETWEEN_QUARTERS;
-  if (play.isTouchdown) return PLAY_DELAY_AFTER_TOUCHDOWN;
-  if (play.turnover) return PLAY_DELAY_AFTER_TURNOVER;
-  if (drama.isClutchMoment) return PLAY_DELAY_CLUTCH;
-  if (drama.isTwoMinuteDrill) return PLAY_DELAY_TWO_MINUTE;
-  return PLAY_DELAY_NORMAL;
+  // Structural pauses take priority
+  if (isHalftime) return REALTIME_HALFTIME_MS;
+  if (isQuarterChange) return REALTIME_QUARTER_BREAK_MS;
+
+  // Base delay: use the actual game-clock time the play consumed
+  let delay: number;
+
+  if (clockUpdate?.isClockRunning && play.clockElapsed && play.clockElapsed > 0) {
+    // Clock is running: real seconds of game clock consumed → real ms
+    delay = play.clockElapsed * 1000;
+  } else if (drama.isTwoMinuteDrill) {
+    // Hurry-up / two-minute drill: faster play clock
+    delay = REALTIME_TWO_MINUTE_PLAY_CLOCK_MS;
+  } else {
+    // Clock stopped (incomplete pass, penalty, etc.): huddle time
+    delay = REALTIME_PLAY_CLOCK_DELAY_MS;
+  }
+
+  // Bonus delays for dramatic moments
+  if (play.isTouchdown) delay += REALTIME_TOUCHDOWN_BONUS_MS;
+  if (play.turnover) delay += REALTIME_TURNOVER_BONUS_MS;
+
+  // Two-minute warning pause
+  if (clockUpdate?.twoMinuteWarning) delay += REALTIME_TWO_MINUTE_WARNING_MS;
+
+  return delay;
 }
 
 // ============================================================================
@@ -420,7 +454,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
           };
 
           const commentary = buildTemplateCommentary(playResult, state, excitement, crowdReaction);
-          const delay = PLAY_DELAY_NORMAL;
+          const delay = calculatePlayDelay(playResult, state, drama, false, false, clockUpdate);
           timestamp += delay;
 
           // Update stats
@@ -755,8 +789,10 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
 
     // --- (h) Advance the clock ---
     // Skip clock advance for PAT plays (they don't consume game clock)
+    // clockUpdate is hoisted so calculatePlayDelay can access it
+    let clockUpdate: ClockUpdate | null = null;
     if (!wasPAT) {
-      const clockUpdate = advanceClock(prevState, playResult, rng);
+      clockUpdate = advanceClock(prevState, playResult, rng);
       state.clock = clockUpdate.clock;
       state.isClockRunning = clockUpdate.isClockRunning;
 
@@ -931,7 +967,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
     if (isHalftime) {
       state.isHalftime = false; // Reset after noting it
     }
-    const delay = calculatePlayDelay(playResult, state, drama, isQuarterChange, isHalftime);
+    const delay = calculatePlayDelay(playResult, state, drama, isQuarterChange, isHalftime, clockUpdate);
     timestamp += delay;
 
     // --- (n) Build GameEvent and push to events array ---
