@@ -402,6 +402,26 @@ body {
   will-change: transform, transform-origin;
 }
 
+/* ─── SkyCam Camera Cut Flash ─── */
+@keyframes camera-cut {
+  0% {
+    background-color: transparent;
+  }
+  40% {
+    background-color: rgba(0, 0, 0, 0.9);
+  }
+  60% {
+    background-color: rgba(0, 0, 0, 0.9);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.camera-cut-flash {
+  animation: camera-cut 250ms ease-in-out forwards;
+}
+
 /* ─── Ball Launch (Punt/Kickoff/FG — ball flies toward viewer) ─── */
 @keyframes ball-launch {
   0% {

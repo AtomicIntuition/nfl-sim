@@ -13,6 +13,7 @@ import { PlayerHighlight } from './field/player-highlight';
 import { PlayCallOverlay } from './field/play-call-overlay';
 import { CrowdAtmosphere } from './field/crowd-atmosphere';
 import { FieldCommentaryOverlay } from './field/field-commentary-overlay';
+import { Minimap } from './field/minimap';
 
 interface FieldVisualProps {
   ballPosition: number;
@@ -216,6 +217,86 @@ export function FieldVisual({
 
   const opposingTeam = possession === 'home' ? awayTeam : homeTeam;
 
+  // ── SkyCam broadcast camera ─────────────────────────────
+  const [skyCamEnabled, setSkyCamEnabled] = useState(false);
+  const [cameraFlash, setCameraFlash] = useState(false);
+  const [cameraOrigin, setCameraOrigin] = useState(50);
+
+  // Hydrate from localStorage after mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('skycam-enabled');
+      if (stored === 'true') setSkyCamEnabled(true);
+    } catch {}
+  }, []);
+
+  // Update camera origin only during idle phase (invisible at scale 1)
+  useEffect(() => {
+    if (!skyCamEnabled || playPhase !== 'idle') return;
+    // Lead 6% in offensive direction
+    const offensiveLead = possession === 'home' ? -6 : 6;
+    const origin = Math.max(18, Math.min(82, ballLeft + offensiveLead));
+    setCameraOrigin(origin);
+  }, [skyCamEnabled, playPhase, ballLeft, possession]);
+
+  // Toggle handler with camera cut flash
+  const handleSkyCamToggle = useCallback(() => {
+    setCameraFlash(true);
+    setTimeout(() => {
+      setSkyCamEnabled(prev => {
+        const next = !prev;
+        try { localStorage.setItem('skycam-enabled', String(next)); } catch {}
+        return next;
+      });
+    }, 125);
+    setTimeout(() => setCameraFlash(false), 250);
+  }, []);
+
+  // Zoom computation based on play phase and play type
+  const skyCamZoom = useMemo(() => {
+    if (!skyCamEnabled) return { scale: 1, transition: 'none' };
+
+    const isFieldGoalOrXP = lastPlay?.type === 'field_goal' || lastPlay?.type === 'extra_point';
+    const isLongKick = lastPlay?.type === 'kickoff' || lastPlay?.type === 'punt';
+
+    let scale = 1;
+    let transition = 'transform 500ms ease-in-out';
+
+    switch (playPhase) {
+      case 'idle':
+        scale = 1;
+        transition = 'transform 700ms ease-in-out';
+        break;
+      case 'pre_snap':
+        if (isLongKick) scale = 1.15;
+        else if (isFieldGoalOrXP) scale = 1.4;
+        else if (isGoalLine) scale = 1.6;
+        else if (isRedZone) scale = 1.6;
+        else scale = 1.6;
+        transition = 'transform 450ms ease-out';
+        break;
+      case 'snap':
+      case 'action':
+      case 'result':
+        if (isLongKick) scale = 1.2;
+        else if (isFieldGoalOrXP) scale = 1.5;
+        else if (isGoalLine) scale = 2.2;
+        else if (isRedZone) scale = 2.1;
+        else scale = 1.9;
+        transition = 'transform 150ms ease-out';
+        break;
+      case 'post_play':
+        scale = 1.3;
+        transition = 'transform 500ms ease-in-out';
+        break;
+      default:
+        scale = 1;
+        transition = 'transform 700ms ease-in-out';
+    }
+
+    return { scale, transition };
+  }, [skyCamEnabled, playPhase, lastPlay?.type, isRedZone, isGoalLine]);
+
   // ── Ball vertical position variety ─────────────────────
   const ballTopPercent = useMemo(() => {
     if (!lastPlay) return 50;
@@ -244,7 +325,15 @@ export function FieldVisual({
         } and ${yardsToGo}.`}
       >
         {/* Perspective wrapper for 3D depth effect */}
-        <div className="field-perspective absolute inset-0">
+        <div
+          className="field-perspective absolute inset-0"
+          style={skyCamEnabled ? {
+            transform: `scale(${skyCamZoom.scale}) rotateX(2deg)`,
+            transformOrigin: `${cameraOrigin}% 55%`,
+            transition: skyCamZoom.transition,
+            willChange: 'transform',
+          } : undefined}
+        >
           {/* SVG field surface (grass, lines, end zones) */}
           <FieldSurface homeTeam={homeTeam} awayTeam={awayTeam} possession={possession} />
 
@@ -340,6 +429,60 @@ export function FieldVisual({
           teamColor={possessingTeam.primaryColor}
           celebKey={celebKey}
         />
+
+        {/* SkyCam toggle button */}
+        <button
+          onClick={handleSkyCamToggle}
+          className="absolute top-2 right-2 z-30 w-8 h-8 rounded-md flex items-center justify-center transition-all duration-200"
+          style={{
+            background: skyCamEnabled
+              ? 'rgba(212, 175, 55, 0.25)'
+              : 'rgba(17, 24, 39, 0.7)',
+            border: skyCamEnabled
+              ? '1px solid rgba(212, 175, 55, 0.5)'
+              : '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: skyCamEnabled
+              ? '0 0 12px rgba(212, 175, 55, 0.3)'
+              : 'none',
+          }}
+          title={skyCamEnabled ? 'Switch to All-22 view' : 'Switch to SkyCam view'}
+          aria-label={skyCamEnabled ? 'Switch to All-22 view' : 'Switch to SkyCam view'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={skyCamEnabled ? '#d4af37' : '#94a3b8'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+            <circle cx="12" cy="13" r="4" />
+          </svg>
+        </button>
+
+        {/* SkyCam minimap — visible when zoomed */}
+        {skyCamEnabled && skyCamZoom.scale > 1 && (
+          <Minimap
+            ballLeftPercent={ballLeft}
+            firstDownLeftPercent={firstDownLeft}
+            driveStartPercent={driveStartLeft}
+            viewportCenter={cameraOrigin}
+            zoomLevel={skyCamZoom.scale}
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            possession={possession}
+          />
+        )}
+
+        {/* SkyCam vignette — depth-of-field effect proportional to zoom */}
+        {skyCamEnabled && skyCamZoom.scale > 1 && (
+          <div
+            className="absolute inset-0 z-[22] pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)',
+              opacity: Math.min(1, (skyCamZoom.scale - 1) / 1.2),
+            }}
+          />
+        )}
+
+        {/* Camera cut flash on toggle */}
+        {cameraFlash && (
+          <div className="absolute inset-0 z-50 pointer-events-none camera-cut-flash" />
+        )}
       </div>
     </div>
   );
