@@ -66,8 +66,8 @@ export function BallMarker({
           <div
             className="absolute rounded-full animate-[ball-pulse_2s_ease-in-out_infinite]"
             style={{
-              width: 36,
-              height: 36,
+              width: 34,
+              height: 34,
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
@@ -81,10 +81,10 @@ export function BallMarker({
         <div
           className="rounded-full overflow-hidden flex items-center justify-center"
           style={{
-            width: 28,
-            height: 28,
+            width: 26,
+            height: 26,
             backgroundColor: '#1a1a2e',
-            border: `2.5px solid ${teamColor}`,
+            border: `2px solid ${teamColor}`,
             boxShadow: `0 0 8px ${teamColor}40, 0 2px 6px rgba(0,0,0,0.6)`,
           }}
         >
@@ -92,7 +92,7 @@ export function BallMarker({
             <img
               src={getTeamLogoUrl(teamAbbreviation)}
               alt=""
-              className="w-5 h-5 object-contain"
+              className="w-[18px] h-[18px] object-contain"
               draggable={false}
             />
           ) : (

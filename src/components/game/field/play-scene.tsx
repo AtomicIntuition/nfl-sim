@@ -85,8 +85,12 @@ export function PlayScene({
       lastPlay.type === 'pregame' || lastPlay.type === 'coin_toss'
     ) return;
 
-    fromToRef.current = { from: prevBallLeftPercent, to: ballLeftPercent };
-    const fromX = prevBallLeftPercent;
+    const isKickPlay = lastPlay.type === 'extra_point' || lastPlay.type === 'field_goal';
+    fromToRef.current = {
+      from: isKickPlay ? ballLeftPercent : prevBallLeftPercent,
+      to: ballLeftPercent,
+    };
+    const fromX = isKickPlay ? ballLeftPercent : prevBallLeftPercent;
     const toX = ballLeftPercent;
 
     onAnimatingRef.current(true);
@@ -141,6 +145,9 @@ export function PlayScene({
   const isSuccess = !isFailedPlay(lastPlay);
 
   const opacity = phase === 'post_play' ? 0.85 : 1;
+  const isHuddlePlay = playType !== 'kickoff' && playType !== 'punt' &&
+    playType !== 'field_goal' && playType !== 'extra_point';
+  const offDir = possession === 'away' ? -1 : 1;
 
   return (
     <div
@@ -151,7 +158,7 @@ export function PlayScene({
       }}
     >
       {/* ─── SVG layer for trajectory lines ─── */}
-      {(phase === 'development' || phase === 'result') && (
+      {(phase === 'development' || phase === 'result' || phase === 'post_play') && (
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
@@ -168,50 +175,105 @@ export function PlayScene({
         </svg>
       )}
 
-      {/* ─── Animated ball with team logo (during development phase) ─── */}
-      {phase === 'development' && (
-        <div
-          className="absolute"
-          style={{
-            left: `${clamp(ballPos.x, 2, 98)}%`,
-            top: `${clamp(ballPos.y, 5, 95)}%`,
-            transform: 'translate(-50%, -50%)',
-            zIndex: 6,
-          }}
-        >
-          {teamAbbreviation ? (
-            <div
-              className="rounded-full overflow-hidden flex items-center justify-center"
-              style={{
-                width: 24,
-                height: 24,
-                backgroundColor: '#1a1a2e',
-                border: `2px solid ${teamColor || offenseColor}`,
-                boxShadow: `0 0 10px ${(teamColor || offenseColor)}50, 0 2px 6px rgba(0,0,0,0.5)`,
-              }}
-            >
-              <img
-                src={getTeamLogoUrl(teamAbbreviation)}
-                alt=""
-                className="w-4 h-4 object-contain"
-                draggable={false}
-              />
-            </div>
-          ) : (
-            /* Fallback football shape */
-            <div
-              style={{
-                width: 14,
-                height: 9,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
-                border: '1px solid #5C2D06',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
-              }}
-            />
-          )}
-        </div>
+      {/* ─── Pre-snap huddle dots ─── */}
+      {(phase === 'pre_snap' || phase === 'snap') && isHuddlePlay && (
+        <HuddleDots
+          fromX={fromX}
+          offenseColor={offenseColor}
+          defenseColor={defenseColor}
+          possession={possession}
+          fading={phase === 'snap'}
+        />
       )}
+
+      {/* ─── Pass target indicator during QB dropback ─── */}
+      {phase === 'development' && animProgress < 0.4 &&
+        (playType === 'pass_complete' || playType === 'pass_incomplete') && (
+        <div
+          className="absolute rounded-full animate-pulse"
+          style={{
+            left: `${clamp(playType === 'pass_complete' ? toX : fromX - offDir * 12, 5, 95)}%`,
+            top: '50%',
+            width: 16,
+            height: 16,
+            transform: 'translate(-50%, -50%)',
+            border: `2px solid ${playType === 'pass_complete' ? '#3b82f6' : '#ef4444'}`,
+            backgroundColor: `${playType === 'pass_complete' ? '#3b82f6' : '#ef4444'}20`,
+            opacity: 0.7 * (1 - animProgress / 0.4),
+            zIndex: 4,
+          }}
+        />
+      )}
+
+      {/* ─── Trailing dots for run plays ─── */}
+      {phase === 'development' && (playType === 'run' || playType === 'scramble' || playType === 'two_point') &&
+        animProgress > 0.1 && (
+        <>
+          {[0.06, 0.12, 0.18].map((offset, i) => {
+            const trailT = Math.max(0, animProgress - offset);
+            const pos = calculateBallPosition(lastPlay, fromX, toX, trailT, possession);
+            return (
+              <div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  left: `${clamp(pos.x, 2, 98)}%`,
+                  top: `${clamp(pos.y, 5, 95)}%`,
+                  width: 6 - i * 1.5,
+                  height: 6 - i * 1.5,
+                  transform: 'translate(-50%, -50%)',
+                  backgroundColor: offenseColor,
+                  opacity: 0.5 - i * 0.15,
+                  zIndex: 5,
+                }}
+              />
+            );
+          })}
+        </>
+      )}
+
+      {/* ─── Animated ball with team logo (all active phases) ─── */}
+      <div
+        className="absolute"
+        style={{
+          left: `${clamp(ballPos.x, 2, 98)}%`,
+          top: `${clamp(ballPos.y, 5, 95)}%`,
+          transform: 'translate(-50%, -50%)',
+          zIndex: 6,
+        }}
+      >
+        {teamAbbreviation ? (
+          <div
+            className="rounded-full overflow-hidden flex items-center justify-center"
+            style={{
+              width: 26,
+              height: 26,
+              backgroundColor: '#1a1a2e',
+              border: `2px solid ${teamColor || offenseColor}`,
+              boxShadow: `0 0 10px ${(teamColor || offenseColor)}50, 0 2px 6px rgba(0,0,0,0.5)`,
+            }}
+          >
+            <img
+              src={getTeamLogoUrl(teamAbbreviation)}
+              alt=""
+              className="w-[18px] h-[18px] object-contain"
+              draggable={false}
+            />
+          </div>
+        ) : (
+          /* Fallback football shape */
+          <div
+            style={{
+              width: 14,
+              height: 9,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
+              border: '1px solid #5C2D06',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
+            }}
+          />
+        )}
+      </div>
 
       {/* ─── Outcome markers ─── */}
       {(phase === 'result' || phase === 'post_play') && (
@@ -272,9 +334,10 @@ function OutcomeMarker({
     color = lastPlay.scoring ? '#22c55e' : '#ef4444';
     x = goalPostX;
     icon = 'circle';
-  } else if ((lastPlay.type === 'run' || lastPlay.type === 'scramble') && lastPlay.yardsGained > 15) {
-    text = `+${lastPlay.yardsGained} YDS`;
-    color = '#22c55e';
+  } else if (lastPlay.type === 'run' || lastPlay.type === 'scramble') {
+    const yards = lastPlay.yardsGained;
+    text = yards >= 0 ? `+${yards} YDS` : `${yards} YDS`;
+    color = yards > 0 ? '#22c55e' : '#ef4444';
     size = 'sm';
   } else if (lastPlay.type === 'pass_complete' && lastPlay.yardsGained > 20) {
     text = `+${lastPlay.yardsGained} YDS`;
@@ -478,8 +541,12 @@ function PlayTrajectory({
       const color = playType === 'scramble' ? '#4ade80' : '#22c55e';
       return (
         <g>
+          {/* Glow line */}
           <line x1={fromX} y1={50} x2={currentX} y2={50}
-            stroke={color} strokeWidth="2" strokeLinecap="round" opacity="0.6" />
+            stroke={color} strokeWidth="6" strokeLinecap="round" opacity="0.15" />
+          {/* Main line */}
+          <line x1={fromX} y1={50} x2={currentX} y2={50}
+            stroke={color} strokeWidth="3" strokeLinecap="round" opacity="0.6" />
           {progress > 0.3 && (
             <polygon
               points={toX > fromX
@@ -500,10 +567,13 @@ function PlayTrajectory({
       return (
         <g>
           <path d={`M ${qbX} 50 Q ${midX} ${50 - arcHeight} ${targetX} 50`}
-            stroke={color} strokeWidth="1.5" fill="none"
-            strokeDasharray="3 3" strokeLinecap="round" opacity="0.5" />
+            stroke={color} strokeWidth="2" fill="none"
+            strokeDasharray="5 3" strokeLinecap="round" opacity="0.5" />
           {progress > 0.7 && playType === 'pass_complete' && (
-            <circle cx={toX} cy={50} r="1.5" fill={color} opacity="0.7" />
+            <>
+              <circle cx={toX} cy={50} r="2.5" fill="none" stroke={color} strokeWidth="0.5" opacity="0.5" />
+              <circle cx={toX} cy={50} r="1.5" fill={color} opacity="0.7" />
+            </>
           )}
         </g>
       );
@@ -554,4 +624,76 @@ function isFailedPlay(play: PlayResult): boolean {
 
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
+}
+
+// ══════════════════════════════════════════════════════════════
+// HUDDLE DOTS (pre-snap formation preview)
+// ══════════════════════════════════════════════════════════════
+
+function HuddleDots({
+  fromX, offenseColor, defenseColor, possession, fading,
+}: {
+  fromX: number; offenseColor: string; defenseColor: string;
+  possession: 'home' | 'away'; fading: boolean;
+}) {
+  const offDir = possession === 'away' ? -1 : 1;
+  const dotSize = 8;
+
+  // Deterministic spread based on fromX to avoid Math.random
+  const seed = Math.round(fromX * 100);
+
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{
+        opacity: fading ? 0 : 1,
+        transition: 'opacity 200ms ease-out',
+      }}
+    >
+      {/* Offense huddle — clustered behind LOS */}
+      {Array.from({ length: 7 }, (_, i) => {
+        const xSpread = ((seed + i * 17) % 15) / 10; // 0–1.5
+        const ySpread = ((seed + i * 31) % 20) - 10; // -10 to +10
+        return (
+          <div
+            key={`off-${i}`}
+            className="absolute rounded-full"
+            style={{
+              left: `${clamp(fromX - offDir * (2 + xSpread), 3, 97)}%`,
+              top: `${clamp(50 + ySpread * 0.8, 25, 75)}%`,
+              width: dotSize,
+              height: dotSize,
+              backgroundColor: offenseColor,
+              opacity: 0.6,
+              transform: 'translate(-50%, -50%)',
+              boxShadow: `0 0 4px ${offenseColor}60`,
+              zIndex: 3,
+            }}
+          />
+        );
+      })}
+      {/* Defense huddle — clustered ahead of LOS */}
+      {Array.from({ length: 7 }, (_, i) => {
+        const xSpread = ((seed + i * 23) % 15) / 10;
+        const ySpread = ((seed + i * 37) % 20) - 10;
+        return (
+          <div
+            key={`def-${i}`}
+            className="absolute rounded-full"
+            style={{
+              left: `${clamp(fromX + offDir * (2.5 + xSpread), 3, 97)}%`,
+              top: `${clamp(50 + ySpread * 0.8, 25, 75)}%`,
+              width: dotSize,
+              height: dotSize,
+              backgroundColor: defenseColor,
+              opacity: 0.6,
+              transform: 'translate(-50%, -50%)',
+              boxShadow: `0 0 4px ${defenseColor}60`,
+              zIndex: 3,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
 }
