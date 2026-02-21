@@ -20,15 +20,15 @@ interface PlaySceneProps {
   teamColor?: string;
 }
 
-// ── Timing ───────────────────────────────────────────────────
-const PRE_SNAP_MS = 500;
-const SNAP_MS = 150;
-const DEVELOPMENT_MS = 1800;
-const RESULT_MS = 600;
-const POST_PLAY_MS = 400;
+// ── Timing (exported for PlayersOverlay) ─────────────────────
+export const PRE_SNAP_MS = 500;
+export const SNAP_MS = 150;
+export const DEVELOPMENT_MS = 1800;
+export const RESULT_MS = 600;
+export const POST_PLAY_MS = 400;
 const TOTAL_MS = PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS + RESULT_MS + POST_PLAY_MS;
 
-type Phase = 'idle' | 'pre_snap' | 'snap' | 'development' | 'result' | 'post_play';
+export type Phase = 'idle' | 'pre_snap' | 'snap' | 'development' | 'result' | 'post_play';
 
 // ── Easing ───────────────────────────────────────────────────
 function easeOutCubic(t: number): number {
@@ -246,8 +246,6 @@ export function PlayScene({
   const isSuccess = !isFailedPlay(lastPlay);
 
   const opacity = phase === 'post_play' ? 0.85 : 1;
-  const isHuddlePlay = playType !== 'kickoff' && playType !== 'punt' &&
-    playType !== 'field_goal' && playType !== 'extra_point';
   const offDir = possession === 'away' ? -1 : 1;
 
   return (
@@ -274,17 +272,6 @@ export function PlayScene({
             success={isSuccess}
           />
         </svg>
-      )}
-
-      {/* ─── Pre-snap huddle dots ─── */}
-      {(phase === 'pre_snap' || phase === 'snap') && isHuddlePlay && (
-        <HuddleDots
-          fromX={fromX}
-          offenseColor={offenseColor}
-          defenseColor={defenseColor}
-          possession={possession}
-          fading={phase === 'snap'}
-        />
       )}
 
       {/* ─── Pass target indicator (route-aware position) ─── */}
@@ -1139,74 +1126,3 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-// ══════════════════════════════════════════════════════════════
-// HUDDLE DOTS (pre-snap formation preview)
-// ══════════════════════════════════════════════════════════════
-
-function HuddleDots({
-  fromX, offenseColor, defenseColor, possession, fading,
-}: {
-  fromX: number; offenseColor: string; defenseColor: string;
-  possession: 'home' | 'away'; fading: boolean;
-}) {
-  const offDir = possession === 'away' ? -1 : 1;
-  const dotSize = 8;
-
-  // Deterministic spread based on fromX to avoid Math.random
-  const seed = Math.round(fromX * 100);
-
-  return (
-    <div
-      className="absolute inset-0 pointer-events-none"
-      style={{
-        opacity: fading ? 0 : 1,
-        transition: 'opacity 200ms ease-out',
-      }}
-    >
-      {/* Offense huddle — clustered behind LOS */}
-      {Array.from({ length: 7 }, (_, i) => {
-        const xSpread = ((seed + i * 17) % 15) / 10; // 0–1.5
-        const ySpread = ((seed + i * 31) % 20) - 10; // -10 to +10
-        return (
-          <div
-            key={`off-${i}`}
-            className="absolute rounded-full"
-            style={{
-              left: `${clamp(fromX - offDir * (2 + xSpread), 3, 97)}%`,
-              top: `${clamp(50 + ySpread * 0.8, 25, 75)}%`,
-              width: dotSize,
-              height: dotSize,
-              backgroundColor: offenseColor,
-              opacity: 0.6,
-              transform: 'translate(-50%, -50%)',
-              boxShadow: `0 0 4px ${offenseColor}60`,
-              zIndex: 3,
-            }}
-          />
-        );
-      })}
-      {/* Defense huddle — clustered ahead of LOS */}
-      {Array.from({ length: 7 }, (_, i) => {
-        const xSpread = ((seed + i * 23) % 15) / 10;
-        const ySpread = ((seed + i * 37) % 20) - 10;
-        return (
-          <div
-            key={`def-${i}`}
-            className="absolute rounded-full"
-            style={{
-              left: `${clamp(fromX + offDir * (2.5 + xSpread), 3, 97)}%`,
-              top: `${clamp(50 + ySpread * 0.8, 25, 75)}%`,
-              width: dotSize,
-              height: dotSize,
-              backgroundColor: defenseColor,
-              opacity: 0.6,
-              transform: 'translate(-50%, -50%)',
-              boxShadow: `0 0 4px ${defenseColor}60`,
-              zIndex: 3,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}

@@ -6,6 +6,7 @@ import { FieldSurface } from './field/field-surface';
 import { BallMarker } from './field/ball-marker';
 import { DownDistanceOverlay } from './field/down-distance-overlay';
 import { PlayScene } from './field/play-scene';
+import { PlayersOverlay } from './field/players-overlay';
 import { CoinFlip } from './field/coin-flip';
 import { CelebrationOverlay } from './field/celebration-overlay';
 import { DriveTrail } from './field/drive-trail';
@@ -359,6 +360,21 @@ export function FieldVisual({
               visible={showDriveTrail}
             />
           </div>
+
+          {/* 22 player dots */}
+          <PlayersOverlay
+            phase={playPhase}
+            ballLeftPercent={ballLeft}
+            prevBallLeftPercent={prevBallLeft}
+            possession={possession}
+            offenseColor={possessingTeam.primaryColor}
+            defenseColor={opposingTeam.primaryColor}
+            lastPlay={lastPlay}
+            playKey={playKey}
+            isKickoff={isKickoff}
+            isPatAttempt={isPatAttempt}
+            gameStatus={gameStatus === 'game_over' ? 'game_over' : gameStatus === 'halftime' ? 'halftime' : gameStatus === 'live' ? 'live' : 'pregame'}
+          />
 
           {/* Ball marker (hides during PlayScene animation) */}
           <BallMarker

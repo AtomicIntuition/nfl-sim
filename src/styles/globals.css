@@ -821,3 +821,19 @@ body {
     opacity: 0;
   }
 }
+
+/* ─── Player Dot Ball Carrier Pulse ─── */
+@keyframes player-carrier-pulse {
+  0%, 100% {
+    box-shadow: 0 0 4px currentColor;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    box-shadow: 0 0 12px currentColor, 0 0 20px currentColor;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+}
+
+.player-carrier-pulse {
+  animation: player-carrier-pulse 0.8s ease-in-out infinite;
+}

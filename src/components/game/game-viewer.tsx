@@ -7,6 +7,7 @@ import type { NarrativeSnapshot, GameState } from '@/lib/simulation/types';
 import { useGameStream } from '@/hooks/use-game-stream';
 import { useMomentum } from '@/hooks/use-momentum';
 import { useDynamicTab } from '@/hooks/use-dynamic-tab';
+import { useProceduralAudio } from '@/hooks/use-procedural-audio';
 import { buildLiveBoxScore } from '@/lib/utils/live-box-score';
 import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 import { ScoreBug } from '@/components/game/scorebug';
@@ -45,6 +46,18 @@ export function GameViewer({ gameId }: GameViewerProps) {
   } = useGameStream(gameId);
 
   const { momentum } = useMomentum(events);
+
+  // Procedural crowd audio
+  const { isMuted, toggle: toggleAudio, triggerReaction } = useProceduralAudio();
+
+  // Trigger audio reactions on new events
+  const prevEventNumRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!currentEvent) return;
+    if (currentEvent.eventNumber === prevEventNumRef.current) return;
+    prevEventNumRef.current = currentEvent.eventNumber;
+    triggerReaction(currentEvent.commentary.crowdReaction, currentEvent.commentary.excitement);
+  }, [currentEvent?.eventNumber]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build live box score progressively from events
   const liveBoxScore = useMemo(() => buildLiveBoxScore(events), [events]);
@@ -198,7 +211,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
     <div className="min-h-dvh flex flex-col lg:h-dvh lg:overflow-hidden">
       {/* ── Top: Nav + ScoreBug (full width) ── */}
       <div className="flex-shrink-0">
-        <GameNav />
+        <GameNav isMuted={isMuted} onToggleAudio={toggleAudio} />
         <ScoreBug
           gameState={gameState}
           status={status === 'game_over' ? 'game_over' : 'live'}
@@ -366,7 +379,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
 
 // ── Game Navigation Bar ──────────────────────────────────────
 
-function GameNav() {
+function GameNav({ isMuted, onToggleAudio }: { isMuted?: boolean; onToggleAudio?: () => void }) {
   return (
     <div className="flex items-center justify-between px-4 py-2 scorebug-glass border-b border-white/[0.06] flex-shrink-0">
       <Link
@@ -375,9 +388,39 @@ function GameNav() {
       >
         {'\u2190'} Home
       </Link>
-      <span className="text-[10px] font-bold text-text-muted tracking-wider uppercase">
-        Live Broadcast
-      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-[10px] font-bold text-text-muted tracking-wider uppercase">
+          Live Broadcast
+        </span>
+        {onToggleAudio && (
+          <button
+            onClick={onToggleAudio}
+            className="w-7 h-7 rounded-md flex items-center justify-center transition-all duration-200"
+            style={{
+              background: isMuted ? 'rgba(17, 24, 39, 0.7)' : 'rgba(212, 175, 55, 0.15)',
+              border: isMuted ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(212, 175, 55, 0.3)',
+            }}
+            title={isMuted ? 'Unmute crowd audio' : 'Mute crowd audio'}
+            aria-label={isMuted ? 'Unmute crowd audio' : 'Mute crowd audio'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isMuted ? '#64748b' : '#d4af37'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {isMuted ? (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </>
+              ) : (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </>
+              )}
+            </svg>
+          </button>
+        )}
+      </div>
       <Link
         href="/schedule"
         className="text-xs font-bold text-text-secondary hover:text-text-primary transition-colors"
