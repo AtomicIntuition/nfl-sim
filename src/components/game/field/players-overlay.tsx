@@ -16,6 +16,7 @@ import {
   RESULT_MS,
 } from './play-scene';
 import type { Phase } from './play-scene';
+import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 
 // Re-export route shapes for WR animations
 const CONCEPT_ROUTES: Record<string, { dx: number; dy: number }[]> = {
@@ -50,6 +51,23 @@ interface PlayersOverlayProps {
   isKickoff: boolean;
   isPatAttempt: boolean;
   gameStatus: 'pregame' | 'live' | 'halftime' | 'game_over';
+  /** Team abbreviation for the QB/carrier logo */
+  teamAbbreviation?: string;
+  /** Team primary color for carrier logo border */
+  teamColor?: string;
+}
+
+type CarrierMode = 'qb_keeps' | 'handoff' | 'pass' | 'scramble' | 'special';
+
+interface BallCarrierState {
+  /** Index of the current logo carrier in offense dots */
+  currentCarrierIdx: number;
+  /** Index of the receiver of the ball (after handoff/catch) */
+  receiverIdx: number;
+  /** The t-value (0-1) at which carrier switches */
+  transferT: number;
+  /** What kind of possession transfer */
+  carrierMode: CarrierMode;
 }
 
 interface DotPos {
@@ -130,6 +148,8 @@ export function PlayersOverlay({
   isKickoff,
   isPatAttempt,
   gameStatus,
+  teamAbbreviation,
+  teamColor,
 }: PlayersOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef(0);
@@ -143,8 +163,17 @@ export function PlayersOverlay({
   const offSnapRef = useRef<DotPos[]>([]);
   const defSnapRef = useRef<DotPos[]>([]);
 
-  // Ball carrier index (-1 = none)
+  // Ball carrier state — tracks who has the team logo
+  const carrierStateRef = useRef<BallCarrierState>({
+    currentCarrierIdx: -1,
+    receiverIdx: -1,
+    transferT: 1,
+    carrierMode: 'special',
+  });
+  // React state mirror for rendering (only updated at key moments, not per-frame)
   const [ballCarrierIdx, setBallCarrierIdx] = useState(-1);
+  // Track whether carrier has transferred (for RAF updates)
+  const carrierTransferredRef = useRef(false);
 
   const offDir = possession === 'away' ? -1 : 1;
   const losX = prevBallLeftPercent; // LOS at play start
@@ -185,27 +214,58 @@ export function PlayersOverlay({
     offSnapRef.current = offPositions;
     defSnapRef.current = defPositions;
 
-    // Determine ball carrier
-    let carrierIdx = -1;
-    if (playType === 'run' || playType === 'scramble' || playType === 'two_point') {
-      // RB is typically index 6 in most formations (after 5 OL + QB)
-      carrierIdx = offPositions.findIndex(p => p.role === 'RB' || p.role === 'FB');
-      if (playType === 'scramble') {
-        carrierIdx = offPositions.findIndex(p => p.role === 'QB');
-      }
+    // Determine ball carrier state with transfer logic
+    const qbIdx = offPositions.findIndex(p => p.role === 'QB');
+    const rbIdx = offPositions.findIndex(p => p.role === 'RB' || p.role === 'FB');
+    const wrIdx = offPositions.findIndex(p => p.role === 'WR');
+
+    let carrierState: BallCarrierState;
+
+    if (playType === 'run' || playType === 'two_point') {
+      // QB hands off to RB at t=0.15
+      carrierState = {
+        currentCarrierIdx: qbIdx >= 0 ? qbIdx : (rbIdx >= 0 ? rbIdx : 0),
+        receiverIdx: rbIdx >= 0 ? rbIdx : qbIdx,
+        transferT: 0.15,
+        carrierMode: 'handoff',
+      };
+    } else if (playType === 'scramble') {
+      // QB keeps ball
+      carrierState = {
+        currentCarrierIdx: qbIdx >= 0 ? qbIdx : 0,
+        receiverIdx: qbIdx >= 0 ? qbIdx : 0,
+        transferT: 1,
+        carrierMode: 'scramble',
+      };
     } else if (playType === 'pass_complete') {
-      // Primary WR (first WR found)
-      carrierIdx = offPositions.findIndex(p => p.role === 'WR');
-    } else if (playType === 'kickoff' || playType === 'punt') {
-      // Returner on the defense side — we'll track on offense for kickoff return
-      carrierIdx = -1; // Special case handled separately
+      // QB throws to WR at t=0.32
+      carrierState = {
+        currentCarrierIdx: qbIdx >= 0 ? qbIdx : 0,
+        receiverIdx: wrIdx >= 0 ? wrIdx : qbIdx,
+        transferT: 0.32,
+        carrierMode: 'pass',
+      };
+    } else if (playType === 'pass_incomplete' || playType === 'sack') {
+      // QB keeps ball throughout
+      carrierState = {
+        currentCarrierIdx: qbIdx >= 0 ? qbIdx : 0,
+        receiverIdx: qbIdx >= 0 ? qbIdx : 0,
+        transferT: 1,
+        carrierMode: 'qb_keeps',
+      };
+    } else {
+      // Special teams (kickoff, punt, FG, XP) — no carrier logo
+      carrierState = {
+        currentCarrierIdx: -1,
+        receiverIdx: -1,
+        transferT: 1,
+        carrierMode: 'special',
+      };
     }
-    if (carrierIdx === -1 && !isSpecialTeams) {
-      // Default to first RB or QB
-      carrierIdx = offPositions.findIndex(p => p.role === 'RB');
-      if (carrierIdx === -1) carrierIdx = offPositions.findIndex(p => p.role === 'QB');
-    }
-    setBallCarrierIdx(carrierIdx);
+
+    carrierStateRef.current = carrierState;
+    carrierTransferredRef.current = false;
+    setBallCarrierIdx(carrierState.currentCarrierIdx);
   }, [lastPlay, losX, offDir]);
 
   // ── Initialize idle positions ────────────────────────────────
@@ -301,6 +361,13 @@ export function PlayersOverlay({
     function tick(now: number) {
       const t = Math.min((now - startTime) / DEVELOPMENT_MS, 1);
       const eased = easeOutCubic(t);
+
+      // Check carrier transfer
+      const cs = carrierStateRef.current;
+      if (!carrierTransferredRef.current && t >= cs.transferT && cs.currentCarrierIdx !== cs.receiverIdx) {
+        carrierTransferredRef.current = true;
+        setBallCarrierIdx(cs.receiverIdx);
+      }
 
       // Animate offense
       const newOff = animateOffense(playType, offStart, t, eased, fromX, toX, lastPlay!);
@@ -651,12 +718,26 @@ export function PlayersOverlay({
 
     const offDots = container.querySelectorAll<HTMLDivElement>('.player-dot-off');
     const defDots = container.querySelectorAll<HTMLDivElement>('.player-dot-def');
+    const cs = carrierStateRef.current;
+    const activeCarrier = carrierTransferredRef.current ? cs.receiverIdx : cs.currentCarrierIdx;
 
     offDotsRef.current.forEach((pos, i) => {
       const el = offDots[i];
       if (el) {
         el.style.left = `${pos.x}%`;
         el.style.top = `${pos.y}%`;
+        // Toggle logo vs dot visibility
+        const logo = el.querySelector<HTMLDivElement>('.carrier-logo');
+        const dot = el.querySelector<HTMLDivElement>('.carrier-dot');
+        if (logo && dot) {
+          if (i === activeCarrier && cs.carrierMode !== 'special') {
+            logo.style.display = 'block';
+            dot.style.display = 'none';
+          } else {
+            logo.style.display = 'none';
+            dot.style.display = 'block';
+          }
+        }
       }
     });
 
@@ -681,34 +762,76 @@ export function PlayersOverlay({
   const useTransition = phase === 'pre_snap' || phase === 'snap' || phase === 'post_play' || phase === 'idle';
   const transitionStyle = useTransition ? 'left 400ms ease-out, top 400ms ease-out' : 'none';
 
+  const logoUrl = teamAbbreviation ? getTeamLogoUrl(teamAbbreviation) : null;
+  const borderColor = teamColor || offenseColor;
+  const cs = carrierStateRef.current;
+
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 pointer-events-none z-[8]"
+      className="absolute inset-0 pointer-events-none z-[11]"
     >
-      {/* Offense dots (11) */}
+      {/* Offense dots (11) — dual-element: hidden logo carrier + visible dot */}
       {Array.from({ length: 11 }, (_, i) => {
-        const isCarrier = i === ballCarrierIdx && (phase === 'development' || phase === 'result');
+        const isCarrier = i === ballCarrierIdx && cs.carrierMode !== 'special';
+        const showLogo = isCarrier && (phase === 'development' || phase === 'result' || phase === 'pre_snap' || phase === 'snap');
         const pos = offDotsRef.current[i] || { x: 50, y: 50 };
         return (
           <div
             key={`off-${i}`}
-            className={`player-dot-off absolute rounded-full ${isCarrier ? 'player-carrier-pulse' : ''}`}
+            className="player-dot-off absolute"
             style={{
               left: `${pos.x}%`,
               top: `${pos.y}%`,
-              width: isCarrier ? 10 : 8,
-              height: isCarrier ? 10 : 8,
-              backgroundColor: offenseColor,
-              opacity: isCarrier ? 1.0 : 0.7,
               transform: 'translate(-50%, -50%)',
-              boxShadow: isCarrier
-                ? `0 0 8px ${offenseColor}`
-                : `0 0 4px ${offenseColor}60`,
-              zIndex: isCarrier ? 5 : 3,
+              zIndex: showLogo ? 6 : 3,
               transition: transitionStyle,
             }}
-          />
+          >
+            {/* Team logo carrier (shown on QB/ball carrier) */}
+            <div
+              className="carrier-logo logo-carrier-glow"
+              style={{
+                display: showLogo && logoUrl ? 'block' : 'none',
+                width: 26,
+                height: 26,
+                borderRadius: '50%',
+                overflow: 'hidden',
+                backgroundColor: '#1a1a2e',
+                border: `2px solid ${borderColor}`,
+                boxShadow: `0 0 10px ${borderColor}50, 0 2px 6px rgba(0,0,0,0.5)`,
+              }}
+            >
+              {logoUrl && (
+                <img
+                  src={logoUrl}
+                  alt=""
+                  style={{
+                    width: 18,
+                    height: 18,
+                    objectFit: 'contain',
+                    margin: '2px auto',
+                    display: 'block',
+                  }}
+                  draggable={false}
+                />
+              )}
+            </div>
+            {/* Regular player dot */}
+            <div
+              className={`carrier-dot rounded-full ${isCarrier && !showLogo ? 'player-carrier-pulse' : ''}`}
+              style={{
+                display: showLogo && logoUrl ? 'none' : 'block',
+                width: isCarrier ? 10 : 8,
+                height: isCarrier ? 10 : 8,
+                backgroundColor: offenseColor,
+                opacity: isCarrier ? 1.0 : 0.7,
+                boxShadow: isCarrier
+                  ? `0 0 8px ${offenseColor}`
+                  : `0 0 4px ${offenseColor}60`,
+              }}
+            />
+          </div>
         );
       })}
 

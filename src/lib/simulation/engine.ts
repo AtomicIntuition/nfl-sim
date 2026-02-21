@@ -51,6 +51,8 @@ import type { PlayCall } from './types';
 import {
   advanceClock,
   getHalftimeTimeoutReset,
+  getPlayClockReset,
+  checkTenSecondRunoff,
   shouldCallTimeout,
   type ClockUpdate,
 } from './clock-manager';
@@ -123,6 +125,8 @@ import {
 import {
   QUARTER_LENGTH,
   TOUCHBACK_POSITION,
+  PUNT_TOUCHBACK_POSITION,
+  KICKOFF_OOB_POSITION,
   REALTIME_PLAY_CLOCK_DELAY_MS,
   REALTIME_TWO_MINUTE_PLAY_CLOCK_MS,
   REALTIME_QUARTER_BREAK_MS,
@@ -554,6 +558,22 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
           playResult.isFirstDown = true;
         }
 
+        // Intentional grounding in the end zone = safety (NFL Rule 8-2-1)
+        // If the passer was in or very near the end zone when grounding occurred
+        if (penalty.type === 'intentional_grounding' && prevState.ballPosition <= 10) {
+          const defensiveTeam = flipPossession(state.possession);
+          playResult.isSafety = true;
+          playResult.isTouchdown = false;
+          playResult.isFirstDown = false;
+          playResult.scoring = {
+            type: 'safety',
+            team: defensiveTeam,
+            points: 2,
+            scorer: null,
+          };
+          playResult.description = 'Intentional grounding in the end zone - Safety!';
+        }
+
         // If pre-snap penalty, skip the rest of play processing
         // (no scoring, no possession change, no clock advance for the play)
         if (isPreSnap) {
@@ -563,6 +583,21 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
           state.quarter = clockUpdate.quarter;
           state.isClockRunning = clockUpdate.isClockRunning;
           state.twoMinuteWarning = state.twoMinuteWarning || clockUpdate.twoMinuteWarning;
+
+          // 10-second runoff: offensive penalty with running clock in last 2 minutes
+          const runoff = checkTenSecondRunoff(prevState, playResult);
+          if (runoff.runoffSeconds > 0) {
+            state.clock = Math.max(0, state.clock - runoff.runoffSeconds);
+            if (runoff.halfEnds) {
+              gameOver = state.quarter === 4 && state.homeScore !== state.awayScore;
+              if (state.quarter === 2 || state.quarter === 4) {
+                state.clock = 0;
+              }
+            }
+          }
+
+          // Update play clock
+          state.playClock = getPlayClockReset(playResult, state);
 
           // Update narrative
           momentum = applyMomentumDecay(momentum);
@@ -666,7 +701,17 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
         const receivingTeam = flipPossession(state.possession);
         state.possession = receivingTeam;
 
-        if (playResult.type === 'touchback' || playResult.yardsGained === 0) {
+        // Check for kickoff out of bounds or fair catch
+        const isKickoffOOB = (playResult as PlayResult & { kickoffOOB?: boolean }).kickoffOOB;
+        const isKickoffFairCatch = (playResult as PlayResult & { kickoffFairCatch?: boolean }).kickoffFairCatch;
+
+        if (isKickoffOOB) {
+          // Kickoff OOB: receiving team gets ball at their 40
+          state.ballPosition = KICKOFF_OOB_POSITION;
+        } else if (isKickoffFairCatch) {
+          // Fair catch on kickoff: ball dead at catch spot
+          state.ballPosition = playResult.yardsGained;
+        } else if (playResult.type === 'touchback' || playResult.yardsGained === 0) {
           // Touchback: ball at the 25
           state.ballPosition = TOUCHBACK_POSITION;
         } else if (playResult.isTouchdown) {
@@ -713,6 +758,23 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
         }
       }
 
+      // Defensive scoring on PAT: if defense intercepts/recovers fumble
+      // and returns it, they score 2 points (NFL Rule 11-3-2-a)
+      if (playResult.turnover && playResult.turnover.returnedForTD && !playResult.scoring) {
+        const defensiveTeam = playResult.turnover.recoveredBy;
+        if (defensiveTeam === 'home') {
+          state.homeScore += 2;
+        } else {
+          state.awayScore += 2;
+        }
+        playResult.scoring = {
+          type: 'two_point_conversion',
+          team: defensiveTeam,
+          points: 2,
+          scorer: null,
+        };
+      }
+
       // After PAT/2pt, set up for kickoff by the scoring team
       state.kickoff = true;
       state.down = 1;
@@ -745,8 +807,8 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
         // Calculate new ball position from receiving team's perspective
         let newBallPosition: number;
         if (landingSpot >= 100) {
-          // Touchback
-          newBallPosition = TOUCHBACK_POSITION;
+          // Punt touchback: ball at the 20 (NFL rule)
+          newBallPosition = PUNT_TOUCHBACK_POSITION;
         } else {
           newBallPosition = 100 - landingSpot;
           // If return yards were factored in (net punt), adjust
@@ -838,11 +900,34 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
         state.yardsToGo = 10;
         needsNewDrive = true;
       }
+      // --- Fumble out of bounds (offense keeps ball) ---
+      else if (playResult.turnover && playResult.turnover.type === 'fumble_oob') {
+        // Ball stays with offense at the fumble spot — treat like a normal play
+        state.ballPosition = Math.max(1, Math.min(99, newBallPosition));
+
+        if (playResult.isFirstDown) {
+          state.down = 1;
+          state.yardsToGo = Math.min(10, 100 - state.ballPosition);
+        } else {
+          const nextDown = state.down + 1;
+          if (nextDown > 4) {
+            // Turnover on downs (unlikely but possible if fumble OOB on 4th down)
+            state.possession = flipPossession(state.possession);
+            state.ballPosition = 100 - state.ballPosition;
+            state.down = 1;
+            state.yardsToGo = 10;
+            possessionChanged = true;
+            needsNewDrive = true;
+            driveEndResult = 'turnover';
+          } else {
+            state.down = nextDown as 1 | 2 | 3 | 4;
+            state.yardsToGo = Math.max(1, state.yardsToGo - playResult.yardsGained);
+          }
+        }
+      }
       // --- Turnover (fumble, interception, etc.) ---
       else if (playResult.turnover) {
         driveEndResult = 'turnover';
-
-        // Calculate new ball position after turnover
         const turnover = playResult.turnover;
 
         if (turnover.returnedForTD && playResult.scoring) {
@@ -924,6 +1009,9 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
       clockUpdate = advanceClock(prevState, playResult, rng);
       state.clock = clockUpdate.clock;
       state.isClockRunning = clockUpdate.isClockRunning;
+
+      // Update play clock (25s after penalties/turnovers/scores, 40s otherwise)
+      state.playClock = getPlayClockReset(playResult, state);
 
       // Handle two-minute warning
       if (clockUpdate.twoMinuteWarning && !state.twoMinuteWarning) {
@@ -1166,9 +1254,25 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
 
     // Check for OT clock expiration
     if (!gameOver && state.quarter === 'OT' && state.clock <= 0) {
-      gameOver = true;
-      if (statsAccumulator.currentDrive) {
-        endDrive(statsAccumulator, 'end_of_half', state);
+      if (state.homeScore === state.awayScore && config.gameType !== 'regular') {
+        // Playoff OT: still tied — start another OT period
+        // Reset with a new coin toss; loser of previous toss kicks
+        if (overtimeState) {
+          const newCoinWinner: PossessionTeam = rng.probability(0.5) ? 'home' : 'away';
+          overtimeState = initializeOvertime(newCoinWinner, rng);
+          state = createOvertimeGameState(state, overtimeState);
+          needsNewDrive = true;
+
+          if (statsAccumulator.currentDrive) {
+            endDrive(statsAccumulator, 'end_of_half', state);
+          }
+        }
+      } else {
+        // Regular season tie or someone is winning
+        gameOver = true;
+        if (statsAccumulator.currentDrive) {
+          endDrive(statsAccumulator, 'end_of_half', state);
+        }
       }
     }
   }

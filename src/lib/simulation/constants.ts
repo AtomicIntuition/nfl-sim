@@ -110,6 +110,9 @@ export const PUNT_RETURN_STDDEV = 5.0;
 /** ~55% of catchable punts result in a fair catch */
 export const FAIR_CATCH_RATE = 0.55;
 
+/** ~15% chance of fair catch on kickoff returns (ball dead at catch spot) */
+export const KICKOFF_FAIR_CATCH_RATE = 0.15;
+
 /**
  * Field goal accuracy by distance range.
  * Ranges are inclusive lower, exclusive upper.
@@ -141,8 +144,10 @@ export function getFieldGoalAccuracy(distanceYards: number): number {
 /** Extra point (PAT) success rate from the 15-yard line (~94% NFL average) */
 export const EXTRA_POINT_RATE = 0.94;
 
-/** Two-point conversion success rate (~48% NFL average) */
-export const TWO_POINT_CONVERSION_RATE = 0.48;
+/** Two-point conversion success rates (run ~55%, pass ~45% in NFL) */
+export const TWO_POINT_CONVERSION_RATE = 0.48; // legacy fallback
+export const TWO_POINT_RUN_RATE = 0.55;
+export const TWO_POINT_PASS_RATE = 0.45;
 
 /** Onside kick recovery rate (~10% in modern NFL after 2018 rule changes) */
 export const ONSIDE_KICK_RECOVERY = 0.10;
@@ -355,6 +360,24 @@ export const PENALTIES: readonly PenaltyDefinition[] = [
     isPreSnap: true,
     isSpotFoul: false,
     frequencyWeight: 3,
+  },
+  {
+    type: 'roughing_the_kicker',
+    name: 'Roughing the Kicker',
+    yards: 15,
+    isAutoFirstDown: true,
+    isPreSnap: false,
+    isSpotFoul: false,
+    frequencyWeight: 0.5,
+  },
+  {
+    type: 'running_into_kicker',
+    name: 'Running Into the Kicker',
+    yards: 5,
+    isAutoFirstDown: false,
+    isPreSnap: false,
+    isSpotFoul: false,
+    frequencyWeight: 1.0,
   },
 ] as const;
 
@@ -623,8 +646,23 @@ export const RED_ZONE = 80;
  */
 export const FIELD_GOAL_RANGE = 63;
 
-/** Ball placed at own 25-yard line after a touchback */
+/** Ball placed at own 25-yard line after a kickoff touchback (post-2016 rule) */
 export const TOUCHBACK_POSITION = 25;
+
+/** Ball placed at own 20-yard line after a punt touchback */
+export const PUNT_TOUCHBACK_POSITION = 20;
+
+/** Chance a kickoff goes out of bounds (~3% in NFL) */
+export const KICKOFF_OOB_RATE = 0.03;
+
+/** Ball placed at receiving team's 40 after kickoff OOB */
+export const KICKOFF_OOB_POSITION = 40;
+
+/** Chance of a fake punt on 4th-and-short in opponent territory */
+export const FAKE_PUNT_RATE = 0.02;
+
+/** Chance of a fake field goal */
+export const FAKE_FG_RATE = 0.01;
 
 /**
  * Safety threshold: if a ball carrier is tackled at or behind their

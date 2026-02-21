@@ -534,6 +534,74 @@ export function getHalftimeTimeoutReset(): {
 }
 
 /**
+ * Check if a 10-second runoff should apply.
+ *
+ * NFL Rule 4-7: In the last 2 minutes of either half, if the offense
+ * commits certain fouls (false start, illegal formation, etc.) while
+ * the clock is running, a 10-second runoff is assessed. The defense
+ * can decline the runoff. If the offense has no timeouts and the
+ * runoff would expire the half, the half ends.
+ *
+ * @returns The number of seconds to deduct (0 or 10), plus whether the half ends.
+ */
+export function checkTenSecondRunoff(
+  state: GameState,
+  play: PlayResult
+): { runoffSeconds: number; halfEnds: boolean } {
+  // Only applies in last 2 minutes of 2nd or 4th quarter
+  if (state.quarter !== 2 && state.quarter !== 4) {
+    return { runoffSeconds: 0, halfEnds: false };
+  }
+  if (state.clock > TWO_MINUTE_WARNING) {
+    return { runoffSeconds: 0, halfEnds: false };
+  }
+
+  // Only on accepted offensive penalties while clock was running
+  if (!play.penalty || play.penalty.declined || play.penalty.offsetting) {
+    return { runoffSeconds: 0, halfEnds: false };
+  }
+
+  // Must be an offensive penalty
+  if (play.penalty.on !== state.possession) {
+    return { runoffSeconds: 0, halfEnds: false };
+  }
+
+  // Clock must have been running
+  if (!state.isClockRunning) {
+    return { runoffSeconds: 0, halfEnds: false };
+  }
+
+  // Applicable penalty types for runoff
+  const runoffPenalties = new Set([
+    'false_start', 'illegal_formation', 'delay_of_game',
+    'too_many_men', 'intentional_grounding', 'illegal_use_of_hands',
+    'holding_offense',
+  ]);
+
+  if (!runoffPenalties.has(play.penalty.type)) {
+    return { runoffSeconds: 0, halfEnds: false };
+  }
+
+  // Check if offense can use a timeout to avoid the runoff
+  const offenseTimeouts = state.possession === 'home'
+    ? state.homeTimeouts
+    : state.awayTimeouts;
+
+  if (offenseTimeouts > 0) {
+    // Team can burn a timeout to avoid the runoff (simplified: we skip it)
+    return { runoffSeconds: 0, halfEnds: false };
+  }
+
+  // 10-second runoff applies
+  if (state.clock <= 10) {
+    // Half ends
+    return { runoffSeconds: state.clock, halfEnds: true };
+  }
+
+  return { runoffSeconds: 10, halfEnds: false };
+}
+
+/**
  * Calculate the play clock value after a play.
  * Most plays reset the play clock to 40 seconds.
  * After certain stoppages (penalties, timeouts, change of possession),

@@ -361,7 +361,7 @@ export function FieldVisual({
             />
           </div>
 
-          {/* 22 player dots */}
+          {/* 22 player dots — QB/carrier gets team logo */}
           <PlayersOverlay
             phase={playPhase}
             ballLeftPercent={ballLeft}
@@ -374,20 +374,20 @@ export function FieldVisual({
             isKickoff={isKickoff}
             isPatAttempt={isPatAttempt}
             gameStatus={gameStatus === 'game_over' ? 'game_over' : gameStatus === 'halftime' ? 'halftime' : gameStatus === 'live' ? 'live' : 'pregame'}
+            teamAbbreviation={possessingTeam.abbreviation}
+            teamColor={possessingTeam.primaryColor}
           />
 
-          {/* Ball marker (hides during PlayScene animation) */}
+          {/* Ball marker — neutral LOS dot (hides during PlayScene animation) */}
           <BallMarker
             leftPercent={ballLeft}
             topPercent={ballTopPercent}
             direction={ballDirection}
             isKicking={!!isKicking}
             hidden={isPlayAnimating}
-            teamAbbreviation={possessingTeam.abbreviation}
-            teamColor={possessingTeam.primaryColor}
           />
 
-          {/* Play scene: animated ball trajectory */}
+          {/* Play scene: animated football trajectory */}
           <PlayScene
             ballLeftPercent={ballLeft}
             prevBallLeftPercent={prevBallLeft}
@@ -398,8 +398,6 @@ export function FieldVisual({
             playKey={playKey}
             onAnimating={handlePlayAnimating}
             onPhaseChange={handlePhaseChange}
-            teamAbbreviation={possessingTeam.abbreviation}
-            teamColor={possessingTeam.primaryColor}
           />
 
           {/* Player name highlight */}

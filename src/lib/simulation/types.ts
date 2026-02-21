@@ -311,6 +311,7 @@ export type TurnoverType =
   | 'fumble'
   | 'interception'
   | 'fumble_recovery'
+  | 'fumble_oob'
   | 'turnover_on_downs'
   | 'muffed_punt';
 
@@ -351,7 +352,9 @@ export type PenaltyType =
   | 'illegal_use_of_hands'
   | 'tripping'
   | 'horse_collar'
-  | 'too_many_men';
+  | 'too_many_men'
+  | 'roughing_the_kicker'
+  | 'running_into_kicker';
 
 export interface PenaltyResult {
   type: PenaltyType;

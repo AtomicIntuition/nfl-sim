@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PlayResult } from '@/lib/simulation/types';
-import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 
 interface PlaySceneProps {
   ballLeftPercent: number;
@@ -14,10 +13,6 @@ interface PlaySceneProps {
   playKey: number;
   onAnimating: (animating: boolean) => void;
   onPhaseChange?: (phase: Phase) => void;
-  /** Team abbreviation for the animated ball logo */
-  teamAbbreviation?: string;
-  /** Team primary color for the animated ball border */
-  teamColor?: string;
 }
 
 // ── Timing (exported for PlayersOverlay) ─────────────────────
@@ -145,8 +140,6 @@ export function PlayScene({
   playKey,
   onAnimating,
   onPhaseChange,
-  teamAbbreviation,
-  teamColor,
 }: PlaySceneProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const prevKeyRef = useRef(playKey);
@@ -335,48 +328,38 @@ export function PlayScene({
         );
       })()}
 
-      {/* ─── Animated ball with team logo (all active phases) ─── */}
-      <div
-        className="absolute"
-        style={{
-          left: `${clamp(ballPos.x, 2, 98)}%`,
-          top: `${clamp(ballPos.y, 5, 95)}%`,
-          transform: 'translate(-50%, -50%)',
-          zIndex: 6,
-        }}
-      >
-        {teamAbbreviation ? (
+      {/* ─── Animated football (simple brown oval) ─── */}
+      {(() => {
+        const isPass = playType === 'pass_complete' || playType === 'pass_incomplete';
+        const isRun = playType === 'run' || playType === 'scramble' || playType === 'two_point';
+        // Spin football on passes; reduce opacity on runs (carrier logo is the main visual)
+        const spinDeg = isPass ? animProgress * 720 : 0;
+        const ballOpacity = isRun ? 0.5 : 1;
+        return (
           <div
-            className="rounded-full overflow-hidden flex items-center justify-center"
+            className="absolute"
             style={{
-              width: 26,
-              height: 26,
-              backgroundColor: '#1a1a2e',
-              border: `2px solid ${teamColor || offenseColor}`,
-              boxShadow: `0 0 10px ${(teamColor || offenseColor)}50, 0 2px 6px rgba(0,0,0,0.5)`,
+              left: `${clamp(ballPos.x, 2, 98)}%`,
+              top: `${clamp(ballPos.y, 5, 95)}%`,
+              transform: 'translate(-50%, -50%)',
+              zIndex: 6,
+              opacity: ballOpacity,
             }}
           >
-            <img
-              src={getTeamLogoUrl(teamAbbreviation)}
-              alt=""
-              className="w-[18px] h-[18px] object-contain"
-              draggable={false}
+            <div
+              style={{
+                width: 14,
+                height: 9,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
+                border: '1px solid #5C2D06',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                transform: `rotate(${spinDeg}deg)`,
+              }}
             />
           </div>
-        ) : (
-          /* Fallback football shape */
-          <div
-            style={{
-              width: 14,
-              height: 9,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
-              border: '1px solid #5C2D06',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
-            }}
-          />
-        )}
-      </div>
+        );
+      })()}
 
       {/* ─── Outcome markers ─── */}
       {(phase === 'result' || phase === 'post_play') && (

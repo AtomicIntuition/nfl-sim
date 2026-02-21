@@ -144,7 +144,7 @@ describe('Special Teams', () => {
         const state = createTestGameState({ kickoff: true });
         const result = resolveKickoff(state, rng, kicker);
 
-        if (result.type !== 'touchback') {
+        if (result.type !== 'touchback' && !(result as any).kickoffOOB) {
           returns.push(result.yardsGained);
         }
       }

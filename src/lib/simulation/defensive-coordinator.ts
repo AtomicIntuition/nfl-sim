@@ -230,19 +230,28 @@ const BLITZ_MODIFIERS: Record<BlitzPackage, BlitzModifierSet> = {
 
 /**
  * Determine whether the game is in a late-game prevent situation.
- * The defense is losing by 14+ points with under 2 minutes remaining
- * in the 4th quarter or overtime.
+ *
+ * Prevent defense triggers when:
+ * - Leading by 10+ with under 2 minutes in Q4/OT
+ * - Leading by any amount with under 30 seconds in Q4/OT
  */
 function isPreventSituation(state: GameState): boolean {
-  const isLateGame =
-    (state.quarter === 4 || state.quarter === 'OT') && state.clock <= 120;
-  if (!isLateGame) return false;
+  if (state.quarter !== 4 && state.quarter !== 'OT') return false;
 
   const defensiveTeam = state.possession === 'home' ? 'away' : 'home';
   const defenseScore = defensiveTeam === 'home' ? state.homeScore : state.awayScore;
   const offenseScore = defensiveTeam === 'home' ? state.awayScore : state.homeScore;
+  const lead = defenseScore - offenseScore;
 
-  return defenseScore >= offenseScore + 14;
+  if (lead <= 0) return false;
+
+  // Leading by any amount with < 30 seconds
+  if (state.clock <= 30) return true;
+
+  // Leading by 10+ with < 2 minutes
+  if (state.clock <= 120 && lead >= 10) return true;
+
+  return false;
 }
 
 /**

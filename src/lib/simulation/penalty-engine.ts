@@ -48,6 +48,8 @@ const DEFENSIVE_PENALTY_TYPES: ReadonlySet<string> = new Set([
   'roughing_the_passer',
   'illegal_contact',
   'neutral_zone_infraction',
+  'roughing_the_kicker',
+  'running_into_kicker',
 ]);
 
 /**
@@ -471,6 +473,11 @@ function filterPenaltiesByContext(play: PlayResult): PenaltyDefinition[] {
       return false;
     }
 
+    // Kicker penalties only on punt/FG plays
+    if (penalty.type === 'roughing_the_kicker' || penalty.type === 'running_into_kicker') {
+      return play.type === 'punt' || play.type === 'field_goal';
+    }
+
     // On special teams plays, limit to a subset of applicable penalties
     if (isSpecialTeams) {
       const specialTeamsPenalties: ReadonlySet<string> = new Set([
@@ -483,6 +490,8 @@ function filterPenaltiesByContext(play: PlayResult): PenaltyDefinition[] {
         'unsportsmanlike_conduct',
         'too_many_men',
         'delay_of_game',
+        'roughing_the_kicker',
+        'running_into_kicker',
       ]);
       return specialTeamsPenalties.has(penalty.type);
     }
@@ -653,6 +662,11 @@ function getPenaltyPositionWeights(
       // Any player
       return { OL: 2, DL: 2, LB: 3, CB: 3, S: 3, WR: 3, TE: 2, RB: 2, QB: 2, K: 1, P: 1 };
 
+    case 'roughing_the_kicker':
+    case 'running_into_kicker':
+      // Defensive linemen and linebackers rushing the kicker
+      return { DL: 10, LB: 6, CB: 1, S: 1, OL: 0, TE: 0, RB: 0, WR: 0, QB: 0, K: 0, P: 0 };
+
     default:
       // Equal weight for all positions
       return { QB: 1, RB: 1, WR: 1, TE: 1, OL: 1, DL: 1, LB: 1, CB: 1, S: 1, K: 1, P: 1 };
@@ -730,13 +744,28 @@ function estimateSpotOfFoul(
   penalty: PenaltyResult
 ): number {
   if (penalty.type === 'pass_interference_defense') {
-    // DPI typically occurs 10-30 yards downfield from the line of scrimmage.
-    // We estimate the depth as 15 yards (a typical intermediate route), clamped
-    // to ensure the spot stays on the field (at most 1 yard from the goal line).
+    // DPI is enforced at the spot of the foul (where the interference occurred).
+    // Estimate depth based on down & distance context:
+    // - Short yardage situations (3rd/4th and short): 5-12 yards
+    // - Medium situations: 10-20 yards
+    // - Deep situations (long yardsToGo or field position): 15-35 yards
+    // The spot cannot be inside the 1-yard line (placed at the 1 in end zone).
+    let estimatedDepth: number;
+    if (state.yardsToGo <= 5) {
+      // Short routes — hitch, slant, out
+      estimatedDepth = Math.max(5, state.yardsToGo + 3);
+    } else if (state.yardsToGo <= 10) {
+      // Medium routes — dig, curl, comeback
+      estimatedDepth = state.yardsToGo + 5;
+    } else {
+      // Long situations — go, post, deep cross
+      estimatedDepth = Math.min(35, state.yardsToGo + 10);
+    }
+
     const maxDepth = Math.max(1, 99 - state.ballPosition);
-    const estimatedDepth = Math.min(15, maxDepth);
+    estimatedDepth = Math.min(estimatedDepth, maxDepth);
     const spotPosition = state.ballPosition + estimatedDepth;
-    return spotPosition;
+    return Math.min(99, spotPosition);
   }
 
   if (penalty.type === 'intentional_grounding') {

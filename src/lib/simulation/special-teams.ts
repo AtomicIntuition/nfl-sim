@@ -105,6 +105,29 @@ export function resolveKickoff(
     return result;
   }
 
+  // Kickoff out of bounds check (~3%)
+  if (rng.probability(C.KICKOFF_OOB_RATE)) {
+    result.yardsGained = 0; // engine will use KICKOFF_OOB_POSITION
+    result.call = 'kickoff_normal';
+    result.description =
+      `${name} kicks it off and it sails out of bounds! Penalty on the ` +
+      `kicking team. Receiving team gets the ball at their own 40-yard line.`;
+    // Mark as OOB via a special flag in the description for engine to detect
+    (result as PlayResult & { kickoffOOB?: boolean }).kickoffOOB = true;
+    return result;
+  }
+
+  // Fair catch on kickoff (~15%) — ball dead at catch spot, first-and-10
+  if (rng.probability(C.KICKOFF_FAIR_CATCH_RATE)) {
+    const catchSpot = rng.randomInt(15, 30); // typically caught in deep territory
+    result.yardsGained = catchSpot;
+    result.description =
+      `${name} kicks it deep. The returner waves for a fair catch at ` +
+      `${yardLineLabel(catchSpot)}. Ball is dead right there, first-and-10.`;
+    (result as PlayResult & { kickoffFairCatch?: boolean }).kickoffFairCatch = true;
+    return result;
+  }
+
   // Live return
   const returnYards = Math.round(
     rng.gaussian(C.KICKOFF_RETURN_MEAN, C.KICKOFF_RETURN_STDDEV, 10, 50)
@@ -222,7 +245,7 @@ export function resolvePunt(
     result.yardsGained = puntDistance;
     result.description =
       `${name} booms it ${puntDistance} yards... and it sails into the end zone. ` +
-      `Touchback. Receiving team takes over at their own 25.`;
+      `Touchback. Receiving team takes over at their own 20.`;
     return result;
   }
 
@@ -462,7 +485,8 @@ export function resolveTwoPoint(
   const wr = players.find((p) => p.position === 'WR') ?? null;
   const te = players.find((p) => p.position === 'TE') ?? null;
 
-  if (rng.probability(C.TWO_POINT_CONVERSION_RATE)) {
+  const successRate = isRun ? C.TWO_POINT_RUN_RATE : C.TWO_POINT_PASS_RATE;
+  if (rng.probability(successRate)) {
     // Conversion successful!
     result.scoring = {
       type: 'two_point_conversion',
@@ -540,9 +564,9 @@ export function calculatePuntReturnPosition(
   // After return: position = (100 - landingSpot) + returnYards
   const landingSpot = puntingTeamBallPosition + puntDistance;
 
-  // If the punt goes into the end zone, touchback at 25
+  // If the punt goes into the end zone, touchback at 20 (punt rule)
   if (landingSpot >= C.ENDZONE_END) {
-    return C.TOUCHBACK_POSITION;
+    return C.PUNT_TOUCHBACK_POSITION;
   }
 
   const receivingTeamPosition = C.FIELD_LENGTH - landingSpot + returnYards;

@@ -27,6 +27,8 @@ import {
   FIELD_GOAL_RANGE,
   RED_ZONE,
   TWO_MINUTE_WARNING,
+  FAKE_PUNT_RATE,
+  FAKE_FG_RATE,
 } from './constants';
 
 // ============================================================================
@@ -516,6 +518,10 @@ export function selectPlay(
         // Go for it on 4th and short when a FG won't help enough
         return selectGoForItPlay(state, rng);
       }
+      // Fake field goal (~1% chance)
+      if (rng.probability(FAKE_FG_RATE)) {
+        return selectGoForItPlay(state, rng);
+      }
       return 'field_goal';
     }
 
@@ -528,6 +534,11 @@ export function selectPlay(
       if (state.ballPosition >= 40) {
         return selectGoForItPlay(state, rng);
       }
+    }
+
+    // Fake punt (~2% when 4th-and-short in opponent territory)
+    if (state.yardsToGo <= 3 && state.ballPosition >= 50 && rng.probability(FAKE_PUNT_RATE)) {
+      return selectGoForItPlay(state, rng);
     }
 
     // Normal situation: punt

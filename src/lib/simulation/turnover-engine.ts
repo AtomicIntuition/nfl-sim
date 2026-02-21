@@ -85,6 +85,16 @@ export function checkFumble(
   }
 
   // Fumble occurred -- who recovers?
+  // ~20% of fumbles go out of bounds (offense keeps ball at fumble spot)
+  if (rng.probability(0.20)) {
+    return {
+      type: 'fumble_oob',
+      recoveredBy: state.possession, // offense keeps it
+      returnYards: 0,
+      returnedForTD: false,
+    };
+  }
+
   const defenseRecovers = rng.probability(C.FUMBLE_RECOVERY_DEFENSE);
 
   if (!defenseRecovers) {
@@ -220,6 +230,14 @@ export function applyTurnover(
 
   // Muffed punt: kicking team (current possession) recovers at the spot
   if (turnover.type === 'muffed_punt') {
+    return {
+      ballPosition: state.ballPosition,
+      possession: newPossession,
+    };
+  }
+
+  // Fumble out of bounds: offense keeps ball at the fumble spot
+  if (turnover.type === 'fumble_oob') {
     return {
       ballPosition: state.ballPosition,
       possession: newPossession,

@@ -62,8 +62,10 @@ Every single game is fully simulated and broadcast one at a time. No games are b
 - `injury-engine.ts` — In-game injuries
 - `stats-tracker.ts` — Box score accumulation, MVP selection
 - `overtime.ts` — NFL overtime rules
-- `defensive-coordinator.ts` — Defensive AI: selects personnel (4-3, 3-4, nickel, dime, goal line, prevent), coverage scheme (cover 0–6, man press), and blitz package based on formation, down/distance, score, and clock; produces `DefensiveModifiers` multipliers for play resolution
+- `defensive-coordinator.ts` — Defensive AI: selects personnel (4-3, 3-4, nickel, dime, goal line, prevent), coverage scheme (cover 0–6, man press), blitz package, 3-4 front variation (odd/over/under/reduce/sink_46), run stunts (stir/knife), and DL pass rush games (T-E/E-T/Tom); produces `DefensiveModifiers` multipliers layered multiplicatively for play resolution
 - `formations.ts` — Offensive formation system with per-formation modifiers (sack rate, run yard bonus, play action bonus, scramble, screen, deep pass, quick release)
+- `personnel.ts` — Offensive personnel grouping selection (00/10/11/12/13/21/22) based on situation (normal, two-minute, goal line, short yardage) with team playStyle shifts; constrains formation choices to personnel-legal sets
+- `route-concepts.ts` — 17 named route concepts from Arians playbook (hitch, curl, shake, angle, stick, semi, bench, drive, cross, blinky, go, cab, pylon, x_ray, delta, screen, waggle); selected based on play call depth and MOFO/MOFC pre-snap coverage read; concept-vs-coverage modifiers create strategic rock-paper-scissors interactions (e.g., x_ray destroys man press, go beats single-high, pylon beats cover 2)
 
 ### Narrative Engine (`src/lib/narrative/`)
 
@@ -180,6 +182,8 @@ Predictions and leaderboard use a cookie-based `userId` (via `x-user-id` header 
 - **`maxDuration: 300`** on simulate route — games can take up to 5 minutes to simulate
 - **`seasons.totalWeeks` defaults to 22** (18 regular + 4 playoff weeks), not 18
 - **Clerk is installed but unused** — user identity is cookie-based; no `<ClerkProvider>` in layout, no middleware
+- **Playbook fields are all optional** — `personnelGrouping`, `routeConcept`, `front`, `runStunt`, `passRushGame` on PlayResult/DefensiveCall are optional; existing games in DB continue to work without them
+- **RNG draw order matters** — adding new `rng.next()` calls (e.g., for personnel/route selection) shifts the entire downstream RNG sequence, changing game outcomes; property tests verify determinism with fixed seeds
 
 ## Environment Variables
 
