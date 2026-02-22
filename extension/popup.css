@@ -248,6 +248,70 @@ body {
   color: rgba(255, 255, 255, 0.3);
 }
 
+/* Admin controls */
+.admin-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.btn-danger-outline {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-sm-inline {
+  display: inline-block;
+  width: auto;
+  padding: 5px 12px;
+  font-size: 11px;
+}
+
+.confirm-banner {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 6px;
+}
+
+.confirm-text {
+  display: block;
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.admin-status {
+  font-size: 11px;
+  padding: 4px 0;
+  text-align: center;
+}
+
+.admin-status.success {
+  color: #22c55e;
+}
+
+.admin-status.error {
+  color: #ef4444;
+}
+
+.admin-status.loading {
+  color: rgba(255, 255, 255, 0.5);
+}
+
 /* Footer */
 .footer {
   display: flex;

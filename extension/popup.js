@@ -133,6 +133,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => { btn.textContent = 'Send'; }, 2000);
   });
 
+  // ── Admin: Restart Season ────────────────────────
+  document.getElementById('btn-restart-season').addEventListener('click', () => {
+    document.getElementById('restart-confirm').style.display = 'block';
+    document.getElementById('restart-status').style.display = 'none';
+  });
+
+  document.getElementById('btn-restart-no').addEventListener('click', () => {
+    document.getElementById('restart-confirm').style.display = 'none';
+  });
+
+  document.getElementById('btn-restart-yes').addEventListener('click', async () => {
+    const confirmEl = document.getElementById('restart-confirm');
+    const statusEl = document.getElementById('restart-status');
+    const btnRestart = document.getElementById('btn-restart-season');
+    confirmEl.style.display = 'none';
+    statusEl.style.display = 'block';
+    statusEl.className = 'admin-status loading';
+    statusEl.textContent = 'Wiping season data...';
+    btnRestart.disabled = true;
+
+    try {
+      const res = await fetch(`${baseUrl}/api/admin/reset?start=true`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${cronSecret}` },
+      });
+
+      if (res.ok) {
+        statusEl.className = 'admin-status success';
+        statusEl.textContent = 'Season restarted! New season created.';
+        // Refresh game/season display after a short delay
+        setTimeout(async () => {
+          try {
+            const gameRes = await fetch(`${baseUrl}/api/game/current`);
+            if (gameRes.ok) {
+              const data = await gameRes.json();
+              if (data.currentGame) showCurrentGame(data);
+              if (data.seasonNumber) {
+                document.getElementById('season-text').textContent =
+                  `Season ${data.seasonNumber} — Week ${data.currentWeek} (${data.seasonStatus?.replace(/_/g, ' ') ?? 'unknown'})`;
+                const pct = Math.min(100, Math.round((data.currentWeek / 22) * 100));
+                document.getElementById('season-progress').style.width = `${pct}%`;
+              }
+            }
+          } catch { /* ignore */ }
+        }, 2000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        statusEl.className = 'admin-status error';
+        statusEl.textContent = `Failed: ${err.error || `HTTP ${res.status}`}`;
+      }
+    } catch (err) {
+      statusEl.className = 'admin-status error';
+      statusEl.textContent = `Network error: ${err.message}`;
+    }
+
+    btnRestart.disabled = false;
+    setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+  });
+
   document.getElementById('btn-jumbotron-clear').addEventListener('click', async () => {
     const btn = document.getElementById('btn-jumbotron-clear');
     btn.textContent = 'Clearing...';

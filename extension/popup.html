@@ -70,6 +70,22 @@
       </div>
     </div>
 
+    <!-- Admin Controls -->
+    <div class="section">
+      <div class="section-label">ADMIN</div>
+      <div class="admin-row">
+        <button id="btn-restart-season" class="btn btn-danger-outline">Restart Season</button>
+      </div>
+      <div id="restart-confirm" class="confirm-banner" style="display:none">
+        <span class="confirm-text">Wipe all season data and start fresh?</span>
+        <div class="confirm-actions">
+          <button id="btn-restart-yes" class="btn btn-danger btn-sm-inline">Yes, Restart</button>
+          <button id="btn-restart-no" class="btn btn-muted btn-sm-inline">Cancel</button>
+        </div>
+      </div>
+      <div id="restart-status" class="admin-status" style="display:none"></div>
+    </div>
+
     <!-- Last Ping -->
     <div class="section">
       <div class="section-label">KEEP-ALIVE</div>

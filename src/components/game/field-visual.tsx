@@ -2,20 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { PlayResult, NarrativeSnapshot } from '@/lib/simulation/types';
-import { FieldSurface } from './field/field-surface';
-import { BallMarker } from './field/ball-marker';
-import { DownDistanceOverlay } from './field/down-distance-overlay';
-import { PlayScene } from './field/play-scene';
-import { PlayersOverlay } from './field/players-overlay';
+import { LedGrid } from './field/led-grid';
 import { CoinFlip } from './field/coin-flip';
 import { CelebrationOverlay } from './field/celebration-overlay';
-import { DriveTrail } from './field/drive-trail';
 import { PlayerHighlight } from './field/player-highlight';
 import { PlayCallOverlay } from './field/play-call-overlay';
 import { CrowdAtmosphere } from './field/crowd-atmosphere';
 import { FieldCommentaryOverlay } from './field/field-commentary-overlay';
-import { Minimap } from './field/minimap';
 import { KickoffIntroOverlay } from './field/kickoff-intro-overlay';
+import type { Phase } from './field/play-timing';
 
 interface FieldVisualProps {
   ballPosition: number;
@@ -36,11 +31,6 @@ interface FieldVisualProps {
   commentary?: { playByPlay: string; crowdReaction: string; excitement: number } | null;
 }
 
-/**
- * Immersive field visual — orchestrator component.
- * Full-field view with formation-accurate player rendering,
- * play-by-play overlays, and crowd atmosphere effects.
- */
 export function FieldVisual({
   ballPosition,
   firstDownLine,
@@ -49,69 +39,19 @@ export function FieldVisual({
   awayTeam,
   down,
   yardsToGo,
-  quarter,
   lastPlay,
   isKickoff,
   isPatAttempt,
   gameStatus,
   driveStartPosition,
-  narrativeContext,
   commentary,
 }: FieldVisualProps) {
-  // ── Coordinate conversion ─────────────────────────────
-
-  const toAbsolutePercent = (pos: number, team: 'home' | 'away'): number => {
-    return team === 'home' ? 100 - pos : pos;
-  };
-
-  let absoluteBallPct = toAbsolutePercent(ballPosition, possession);
-
-  // Force ball to the correct end zone on touchdowns.
-  if (lastPlay?.isTouchdown && lastPlay?.scoring) {
-    absoluteBallPct = lastPlay.scoring.team === 'home' ? 0 : 100;
-  }
-
-  const absoluteFirstDownPct = toAbsolutePercent(
-    Math.min(firstDownLine, 100),
-    possession
-  );
-  const absoluteDriveStartPct = toAbsolutePercent(driveStartPosition, possession);
-
-  const endZoneWidth = 8.33;
-  const fieldStart = endZoneWidth;
-  const fieldWidth = 100 - endZoneWidth * 2;
-
-  let ballLeft = fieldStart + (absoluteBallPct / 100) * fieldWidth;
-
-  // Push ball visually INTO the end zone graphic
-  if (lastPlay?.isTouchdown) {
-    if (absoluteBallPct >= 95) {
-      ballLeft = 96;
-    } else if (absoluteBallPct <= 5) {
-      ballLeft = 4;
-    }
-  }
-
-  const firstDownLeft = fieldStart + (absoluteFirstDownPct / 100) * fieldWidth;
-  const driveStartLeft = fieldStart + (absoluteDriveStartPct / 100) * fieldWidth;
-
   // ── Play tracking for animations ──────────────────────
 
   const [playKey, setPlayKey] = useState(0);
   const [celebKey, setCelebKey] = useState(0);
   const [highlightKey, setHighlightKey] = useState(0);
   const prevPlayRef = useRef<PlayResult | null>(null);
-  const [prevBallLeft, setPrevBallLeft] = useState(ballLeft);
-
-  const ballDirection = useMemo<'left' | 'right' | null>(() => {
-    const diff = ballLeft - prevBallLeft;
-    if (Math.abs(diff) < 0.5) return null;
-    return diff > 0 ? 'right' : 'left';
-  }, [ballLeft, prevBallLeft]);
-
-  useEffect(() => {
-    setPrevBallLeft(ballLeft);
-  }, [ballLeft]);
 
   // Detect new play
   useEffect(() => {
@@ -119,13 +59,8 @@ export function FieldVisual({
     prevPlayRef.current = lastPlay;
     setPlayKey((k) => k + 1);
 
-    if (lastPlay.isTouchdown) {
-      setCelebKey((k) => k + 1);
-    } else if (lastPlay.turnover) {
-      setCelebKey((k) => k + 1);
-    } else if (lastPlay.isSafety) {
-      setCelebKey((k) => k + 1);
-    } else if (lastPlay.type === 'field_goal' && lastPlay.scoring) {
+    if (lastPlay.isTouchdown || lastPlay.turnover || lastPlay.isSafety ||
+        (lastPlay.type === 'field_goal' && lastPlay.scoring)) {
       setCelebKey((k) => k + 1);
     }
 
@@ -168,10 +103,8 @@ export function FieldVisual({
 
   const handleCoinFlipComplete = useCallback(() => {
     setShowCoinFlip(false);
-    // After coin flip fades out, show kickoff intro overlay
     if (!kickoffIntroShownRef.current) {
       kickoffIntroShownRef.current = true;
-      // Short delay to let coin flip fully fade before intro appears
       setTimeout(() => {
         setShowKickoffIntro(true);
       }, 500);
@@ -181,14 +114,6 @@ export function FieldVisual({
   const handleKickoffIntroComplete = useCallback(() => {
     setShowKickoffIntro(false);
   }, []);
-
-  // ── Kicking detection ─────────────────────────────────
-
-  const isKicking =
-    lastPlay?.type === 'punt' ||
-    lastPlay?.type === 'kickoff' ||
-    lastPlay?.type === 'field_goal' ||
-    lastPlay?.type === 'extra_point';
 
   // ── Player highlight data ─────────────────────────────
 
@@ -217,23 +142,18 @@ export function FieldVisual({
   // ── Possessing team data ──────────────────────────────
 
   const possessingTeam = possession === 'home' ? homeTeam : awayTeam;
-  const isRedZone = ballPosition >= 80;
-  const isGoalLine = ballPosition >= 95;
-  const showDriveTrail = !isKickoff && !isPatAttempt && gameStatus === 'live';
 
-  // ── PlayScene animation state ──────────────────────────
+  // ── LedGrid animation state ───────────────────────────
   const [isPlayAnimating, setIsPlayAnimating] = useState(false);
-  const [playPhase, setPlayPhase] = useState<string>('idle');
+  const [playPhase, setPlayPhase] = useState<Phase>('idle');
   const handlePlayAnimating = useCallback((animating: boolean) => {
     setIsPlayAnimating(animating);
   }, []);
-  const handlePhaseChange = useCallback((phase: string) => {
+  const handlePhaseChange = useCallback((phase: Phase) => {
     setPlayPhase(phase);
   }, []);
 
-  const opposingTeam = possession === 'home' ? awayTeam : homeTeam;
-
-  // ── Big play border pulse ────────────────────────────────
+  // ── Big play border pulse ─────────────────────────────
   const [borderPulse, setBorderPulse] = useState(false);
   useEffect(() => {
     if (!lastPlay) return;
@@ -250,117 +170,11 @@ export function FieldVisual({
     }
   }, [lastPlay]);
 
-  // ── SkyCam broadcast camera ─────────────────────────────
-  const [skyCamEnabled, setSkyCamEnabled] = useState(false);
-  const [cameraFlash, setCameraFlash] = useState(false);
-  const [cameraOrigin, setCameraOrigin] = useState(50);
-
-  // Hydrate from localStorage after mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('skycam-enabled');
-      if (stored === 'true') setSkyCamEnabled(true);
-    } catch {}
-  }, []);
-
-  // Update camera origin — tracks ball position across phases
-  useEffect(() => {
-    if (!skyCamEnabled) return;
-    // Lead 6% in offensive direction during idle/pre_snap
-    const offensiveLead = possession === 'home' ? -6 : 6;
-    if (playPhase === 'idle' || playPhase === 'pre_snap') {
-      const origin = Math.max(18, Math.min(82, ballLeft + offensiveLead));
-      setCameraOrigin(origin);
-    } else if (playPhase === 'development' || playPhase === 'result') {
-      // Smoothly track ball position during play
-      const origin = Math.max(18, Math.min(82, ballLeft));
-      setCameraOrigin(origin);
-    }
-  }, [skyCamEnabled, playPhase, ballLeft, possession]);
-
-  // Toggle handler with camera cut flash
-  const handleSkyCamToggle = useCallback(() => {
-    setCameraFlash(true);
-    setTimeout(() => {
-      setSkyCamEnabled(prev => {
-        const next = !prev;
-        try { localStorage.setItem('skycam-enabled', String(next)); } catch {}
-        return next;
-      });
-    }, 125);
-    setTimeout(() => setCameraFlash(false), 250);
-  }, []);
-
-  // Zoom computation based on play phase and play type
-  const skyCamZoom = useMemo(() => {
-    if (!skyCamEnabled) return { scale: 1, transition: 'none' };
-
-    const isFieldGoalOrXP = lastPlay?.type === 'field_goal' || lastPlay?.type === 'extra_point';
-    const isLongKick = lastPlay?.type === 'kickoff' || lastPlay?.type === 'punt';
-
-    let scale = 1;
-    let transition = 'transform 500ms ease-in-out, transform-origin 400ms ease-out';
-
-    switch (playPhase) {
-      case 'idle':
-        scale = 1;
-        transition = 'transform 700ms ease-in-out, transform-origin 400ms ease-out';
-        break;
-      case 'pre_snap':
-        if (isLongKick) scale = 1.05;
-        else if (isFieldGoalOrXP) scale = 1.4;
-        else if (isGoalLine) scale = 1.45;
-        else if (isRedZone) scale = 1.4;
-        else scale = 1.35;
-        transition = 'transform 600ms ease-out, transform-origin 400ms ease-out';
-        break;
-      case 'snap':
-        // Intermediate zoom — smoother transition from pre_snap to development
-        if (isLongKick) scale = 1.1;
-        else if (isFieldGoalOrXP) scale = 1.45;
-        else if (isGoalLine) scale = 1.6;
-        else if (isRedZone) scale = 1.5;
-        else scale = 1.45;
-        transition = 'transform 250ms ease-out, transform-origin 400ms ease-out';
-        break;
-      case 'action':
-      case 'result':
-        if (isLongKick) scale = 1.15;
-        else if (isFieldGoalOrXP) scale = 1.5;
-        else if (isGoalLine) scale = 1.8;
-        else if (isRedZone) scale = 1.6;
-        else scale = 1.55;
-        transition = 'transform 150ms ease-out, transform-origin 400ms ease-out';
-        break;
-      case 'post_play':
-        scale = 1.2;
-        transition = 'transform 500ms ease-in-out, transform-origin 400ms ease-out';
-        break;
-      default:
-        scale = 1;
-        transition = 'transform 700ms ease-in-out, transform-origin 400ms ease-out';
-    }
-
-    return { scale, transition };
-  }, [skyCamEnabled, playPhase, lastPlay?.type, isRedZone, isGoalLine]);
-
-  // ── Ball vertical position variety ─────────────────────
-  const ballTopPercent = useMemo(() => {
-    if (!lastPlay) return 50;
-    switch (lastPlay.type) {
-      case 'run':
-        return 45 + (lastPlay.yardsGained % 7) * 2;
-      case 'pass_complete':
-      case 'pass_incomplete':
-        return 42 + (Math.abs(lastPlay.yardsGained) % 5) * 3;
-      case 'sack':
-        return 55;
-      case 'scramble':
-        return 40 + (lastPlay.yardsGained % 6) * 3;
-      default:
-        return 50;
-    }
-  }, [lastPlay]);
+  // Ball left percent for overlay positioning (approximate from position)
+  const endZoneWidth = 8.33;
+  const fieldWidth = 100 - endZoneWidth * 2;
+  const absoluteBallPct = possession === 'home' ? 100 - ballPosition : ballPosition;
+  const ballLeft = endZoneWidth + (absoluteBallPct / 100) * fieldWidth;
 
   return (
     <div className="w-full h-full px-1.5 py-1">
@@ -371,6 +185,7 @@ export function FieldVisual({
           down === 1 ? 'st' : down === 2 ? 'nd' : down === 3 ? 'rd' : 'th'
         } and ${yardsToGo}.`}
         style={{
+          background: 'rgba(10, 15, 25, 0.95)',
           border: borderPulse
             ? '1.5px solid rgba(212, 175, 55, 0.6)'
             : '1.5px solid rgba(255, 255, 255, 0.08)',
@@ -380,102 +195,33 @@ export function FieldVisual({
           transition: 'border-color 300ms ease-out, box-shadow 300ms ease-out',
         }}
       >
-        {/* Digital grid texture overlay */}
-        <div
-          className="absolute inset-0 z-[25] pointer-events-none"
-          style={{
-            backgroundImage: `
-              linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
-            `,
-            backgroundSize: '20px 20px',
-          }}
+        {/* LED Grid Board */}
+        <LedGrid
+          ballPosition={ballPosition}
+          firstDownLine={firstDownLine}
+          possession={possession}
+          down={down}
+          yardsToGo={yardsToGo}
+          driveStartPosition={driveStartPosition}
+          homeTeam={homeTeam}
+          awayTeam={awayTeam}
+          lastPlay={lastPlay}
+          playKey={playKey}
+          isKickoff={isKickoff}
+          isPatAttempt={isPatAttempt}
+          gameStatus={gameStatus}
+          onPhaseChange={handlePhaseChange}
+          onAnimating={handlePlayAnimating}
         />
-        {/* Perspective wrapper for 3D depth effect */}
-        <div
-          className="field-perspective absolute inset-0"
-          style={skyCamEnabled ? {
-            transform: `scale(${skyCamZoom.scale}) rotateX(2deg)`,
-            transformOrigin: `${cameraOrigin}% 55%`,
-            transition: skyCamZoom.transition,
-            willChange: 'transform',
-          } : undefined}
-        >
-          {/* SVG field surface (grass, lines, end zones) */}
-          <FieldSurface homeTeam={homeTeam} awayTeam={awayTeam} possession={possession} />
 
-          {/* Down & distance overlay */}
-          <div className="absolute inset-0">
-            <DownDistanceOverlay
-              ballLeftPercent={ballLeft}
-              firstDownLeftPercent={firstDownLeft}
-              down={down}
-              yardsToGo={yardsToGo}
-              isRedZone={isRedZone}
-              isGoalLine={isGoalLine}
-              possession={possession}
-            />
-          </div>
-
-          {/* Drive trail */}
-          <div className="absolute inset-0">
-            <DriveTrail
-              driveStartPercent={driveStartLeft}
-              ballPercent={ballLeft}
-              teamColor={possessingTeam.primaryColor}
-              visible={showDriveTrail}
-            />
-          </div>
-
-          {/* 22 player dots — QB/carrier gets team logo */}
-          <PlayersOverlay
-            phase={playPhase}
-            ballLeftPercent={ballLeft}
-            prevBallLeftPercent={prevBallLeft}
-            possession={possession}
-            offenseColor={possessingTeam.primaryColor}
-            defenseColor={opposingTeam.primaryColor}
-            lastPlay={lastPlay}
-            playKey={playKey}
-            isKickoff={isKickoff}
-            isPatAttempt={isPatAttempt}
-            gameStatus={gameStatus === 'game_over' ? 'game_over' : gameStatus === 'halftime' ? 'halftime' : gameStatus === 'live' ? 'live' : 'pregame'}
-            teamAbbreviation={possessingTeam.abbreviation}
-            teamColor={possessingTeam.primaryColor}
-            opposingTeamAbbreviation={opposingTeam.abbreviation}
-          />
-
-          {/* Ball marker — neutral LOS dot (hides during PlayScene animation) */}
-          <BallMarker
-            leftPercent={ballLeft}
-            topPercent={ballTopPercent}
-            direction={ballDirection}
-            isKicking={!!isKicking}
-            hidden={isPlayAnimating}
-          />
-
-          {/* Play scene: animated football trajectory */}
-          <PlayScene
-            ballLeftPercent={ballLeft}
-            prevBallLeftPercent={prevBallLeft}
-            possession={possession}
-            offenseColor={possessingTeam.primaryColor}
-            defenseColor={opposingTeam.primaryColor}
-            lastPlay={lastPlay}
-            playKey={playKey}
-            onAnimating={handlePlayAnimating}
-            onPhaseChange={handlePhaseChange}
-          />
-
-          {/* Player name highlight */}
-          <PlayerHighlight
-            playerName={highlightPlayer.name}
-            jerseyNumber={highlightPlayer.number}
-            teamColor={possessingTeam.primaryColor}
-            ballPercent={ballLeft}
-            highlightKey={highlightKey}
-          />
-        </div>
+        {/* Player name highlight */}
+        <PlayerHighlight
+          playerName={highlightPlayer.name}
+          jerseyNumber={highlightPlayer.number}
+          teamColor={possessingTeam.primaryColor}
+          ballPercent={ballLeft}
+          highlightKey={highlightKey}
+        />
 
         {/* Play call overlay */}
         <PlayCallOverlay
@@ -491,7 +237,7 @@ export function FieldVisual({
           excitement={commentary?.excitement ?? 0}
         />
 
-        {/* Field commentary overlay — bottom of field */}
+        {/* Field commentary overlay */}
         <FieldCommentaryOverlay
           text={commentary?.playByPlay ?? null}
           lastPlay={lastPlay}
@@ -504,7 +250,7 @@ export function FieldVisual({
           onComplete={handleCoinFlipComplete}
         />
 
-        {/* Kickoff intro overlay (shown between coin flip and first kickoff) */}
+        {/* Kickoff intro overlay */}
         <KickoffIntroOverlay
           show={showKickoffIntro}
           awayTeam={awayTeam}
@@ -518,60 +264,6 @@ export function FieldVisual({
           teamColor={possessingTeam.primaryColor}
           celebKey={celebKey}
         />
-
-        {/* SkyCam toggle button */}
-        <button
-          onClick={handleSkyCamToggle}
-          className="absolute top-2 right-2 z-30 w-8 h-8 rounded-md flex items-center justify-center transition-all duration-200"
-          style={{
-            background: skyCamEnabled
-              ? 'rgba(212, 175, 55, 0.25)'
-              : 'rgba(17, 24, 39, 0.7)',
-            border: skyCamEnabled
-              ? '1px solid rgba(212, 175, 55, 0.5)'
-              : '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: skyCamEnabled
-              ? '0 0 12px rgba(212, 175, 55, 0.3)'
-              : 'none',
-          }}
-          title={skyCamEnabled ? 'Switch to All-22 view' : 'Switch to SkyCam view'}
-          aria-label={skyCamEnabled ? 'Switch to All-22 view' : 'Switch to SkyCam view'}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={skyCamEnabled ? '#d4af37' : '#94a3b8'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-            <circle cx="12" cy="13" r="4" />
-          </svg>
-        </button>
-
-        {/* SkyCam minimap — visible when zoomed */}
-        {skyCamEnabled && skyCamZoom.scale > 1 && (
-          <Minimap
-            ballLeftPercent={ballLeft}
-            firstDownLeftPercent={firstDownLeft}
-            driveStartPercent={driveStartLeft}
-            viewportCenter={cameraOrigin}
-            zoomLevel={skyCamZoom.scale}
-            homeTeam={homeTeam}
-            awayTeam={awayTeam}
-            possession={possession}
-          />
-        )}
-
-        {/* SkyCam vignette — depth-of-field effect proportional to zoom */}
-        {skyCamEnabled && skyCamZoom.scale > 1 && (
-          <div
-            className="absolute inset-0 z-[22] pointer-events-none"
-            style={{
-              background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)',
-              opacity: Math.min(1, (skyCamZoom.scale - 1) / 1.2),
-            }}
-          />
-        )}
-
-        {/* Camera cut flash on toggle */}
-        {cameraFlash && (
-          <div className="absolute inset-0 z-50 pointer-events-none camera-cut-flash" />
-        )}
       </div>
     </div>
   );

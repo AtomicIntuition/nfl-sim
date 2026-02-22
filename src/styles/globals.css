@@ -386,7 +386,7 @@ body {
 /* ─── Field Container & Perspective ─── */
 .field-container {
   perspective: 1200px;
-  background: #1a3a15;
+  background: rgba(10, 15, 25, 0.95);
 }
 
 .field-perspective {
@@ -906,4 +906,33 @@ body {
   0% { opacity: 0; transform: scale(0.3); }
   60% { opacity: 1; transform: scale(1.2); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * LED GRID BOARD — Animations
+ * ═══════════════════════════════════════════════════════════ */
+
+/* ─── Touchdown Pulse (end zone glow cycle) ─── */
+@keyframes led-td-pulse {
+  0%   { opacity: 1; }
+  40%  { opacity: 0.7; }
+  70%  { opacity: 1; }
+  100% { opacity: 0.85; }
+}
+
+.led-td-pulse {
+  animation: led-td-pulse 0.6s ease-in-out 2;
+}
+
+/* ─── Turnover Flash (amber flash) ─── */
+@keyframes led-turnover-flash {
+  0%   { box-shadow: inset 0 0 0 rgba(245, 158, 11, 0); }
+  30%  { box-shadow: inset 0 0 30px rgba(245, 158, 11, 0.3); }
+  60%  { box-shadow: inset 0 0 0 rgba(245, 158, 11, 0); }
+  80%  { box-shadow: inset 0 0 15px rgba(245, 158, 11, 0.15); }
+  100% { box-shadow: inset 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+.led-turnover-flash {
+  animation: led-turnover-flash 0.5s ease-out;
 }
