@@ -380,14 +380,14 @@ export default async function SchedulePage({
                     </div>
                   </div>
 
-                  {/* Score */}
+                  {/* Score — hidden during broadcast to avoid spoilers (DB has final score, not current) */}
                   <div className="flex items-center gap-4 px-4">
-                    <span className="text-2xl sm:text-3xl font-mono font-black text-text-primary tabular-nums">
-                      {liveGame.awayScore ?? 0}
+                    <span className="text-2xl sm:text-3xl font-mono font-black text-text-muted tabular-nums">
+                      &ndash;
                     </span>
-                    <span className="text-sm font-bold text-text-muted">-</span>
-                    <span className="text-2xl sm:text-3xl font-mono font-black text-text-primary tabular-nums">
-                      {liveGame.homeScore ?? 0}
+                    <span className="text-sm font-bold text-text-muted">vs</span>
+                    <span className="text-2xl sm:text-3xl font-mono font-black text-text-muted tabular-nums">
+                      &ndash;
                     </span>
                   </div>
 
