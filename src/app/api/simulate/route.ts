@@ -16,6 +16,7 @@ import { generateSeasonSchedule } from '@/lib/scheduling/schedule-generator';
 import { calculatePlayoffSeeds } from '@/lib/scheduling/playoff-manager';
 import { simulateGame } from '@/lib/simulation/engine';
 import { ESTIMATED_GAME_SLOT_MS } from '@/lib/simulation/constants';
+import { INTERMISSION_MS, WEEK_BREAK_MS, OFFSEASON_MS } from '@/lib/scheduling/constants';
 import { scorePredictions } from '@/lib/db/queries/predictions';
 import { updateUserScore } from '@/lib/db/queries/leaderboard';
 import type {
@@ -147,8 +148,7 @@ async function determineNextAction(): Promise<SimAction> {
     // Check if enough time has passed since completion
     if (season.completedAt) {
       const timeSinceComplete = Date.now() - new Date(season.completedAt).getTime();
-      const OFFSEASON_DURATION = 30 * 60 * 1000; // 30 minutes between seasons
-      if (timeSinceComplete >= OFFSEASON_DURATION) {
+      if (timeSinceComplete >= OFFSEASON_MS) {
         return { type: 'create_season' };
       }
     }
@@ -187,10 +187,16 @@ async function determineNextAction(): Promise<SimAction> {
 
       if (broadcastDuration >= MIN_BROADCAST) {
         // Broadcast duration met — complete the game and update standings
-        await db
+        // Use AND status='broadcasting' to prevent double-completion from concurrent ticks
+        const updateResult = await db
           .update(games)
           .set({ status: 'completed', completedAt: new Date() })
-          .where(eq(games.id, activeGame.id));
+          .where(and(eq(games.id, activeGame.id), eq(games.status, 'broadcasting')));
+
+        // If no rows were updated, the game was already completed by another tick
+        if (updateResult.length === 0) {
+          return { type: 'idle', message: 'Game already completed by another tick' };
+        }
 
         // Update standings now that the game is officially complete
         const [ht, at] = await Promise.all([
@@ -242,7 +248,6 @@ async function determineNextAction(): Promise<SimAction> {
   }
 
   // ---- Intermission: pause after a broadcast finishes before next game ----
-  const INTERMISSION_MS = 15 * 60 * 1000; // 15 minutes between games
 
   const lastCompleted = weekGames
     .filter((g) => g.status === 'completed' && g.completedAt)
@@ -261,8 +266,19 @@ async function determineNextAction(): Promise<SimAction> {
     }
   }
 
+  // Re-query week games from DB to get freshest state (guards against concurrent requests)
+  const freshWeekGames = await db
+    .select()
+    .from(games)
+    .where(
+      and(
+        eq(games.seasonId, season.id),
+        eq(games.week, season.currentWeek)
+      )
+    );
+
   // Check if there's a game already marked as featured and scheduled
-  const featuredGame = weekGames.find(
+  const featuredGame = freshWeekGames.find(
     (g) => g.isFeatured && g.status === 'scheduled'
   );
 
@@ -275,9 +291,10 @@ async function determineNextAction(): Promise<SimAction> {
   }
 
   // Pick the next game to play from remaining scheduled games
-  if (scheduledGames.length > 0) {
+  const freshScheduled = freshWeekGames.filter((g) => g.status === 'scheduled');
+  if (freshScheduled.length > 0) {
     const bestGameId = await pickBestFeaturedGame(
-      scheduledGames, season.id, season.currentWeek
+      freshScheduled, season.id, season.currentWeek
     );
     await db
       .update(games)
@@ -304,15 +321,14 @@ async function determineNextAction(): Promise<SimAction> {
     }
 
     // ---- Inter-week break: 30 min pause before advancing to next week ----
-    const WEEK_INTERMISSION_MS = 30 * 60 * 1000;
     const lastCompletedGame = weekGames
       .filter((g) => g.completedAt)
       .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0];
 
     if (lastCompletedGame?.completedAt) {
       const elapsed = Date.now() - lastCompletedGame.completedAt.getTime();
-      if (elapsed < WEEK_INTERMISSION_MS) {
-        const minsLeft = Math.ceil((WEEK_INTERMISSION_MS - elapsed) / 60000);
+      if (elapsed < WEEK_BREAK_MS) {
+        const minsLeft = Math.ceil((WEEK_BREAK_MS - elapsed) / 60000);
         return {
           type: 'idle',
           message: `Week ${season.currentWeek} complete — next week in ${minsLeft} min`,
@@ -618,6 +634,27 @@ async function handleAdvanceWeek(seasonId: string) {
   }
 
   const season = seasonRows[0];
+
+  // Defensive check: refuse to advance if any game is still active
+  const currentWeekGames = await db
+    .select()
+    .from(games)
+    .where(
+      and(eq(games.seasonId, seasonId), eq(games.week, season.currentWeek))
+    );
+
+  const activeOrScheduled = currentWeekGames.filter(
+    (g) => g.status === 'scheduled' || g.status === 'broadcasting' || g.status === 'simulating'
+  );
+  if (activeOrScheduled.length > 0) {
+    console.warn(
+      `handleAdvanceWeek: ${activeOrScheduled.length} games still active/scheduled in week ${season.currentWeek}`,
+      activeOrScheduled.map((g) => ({ id: g.id, status: g.status }))
+    );
+    return {
+      error: `Cannot advance week — ${activeOrScheduled.length} game(s) still ${activeOrScheduled[0].status} in week ${season.currentWeek}`,
+    };
+  }
 
   // ==================================================================
   // Regular season -> Playoffs transition (week 18 complete)
@@ -1166,17 +1203,44 @@ async function generateSuperBowlGame(seasonId: string): Promise<number> {
 }
 
 async function handleSeasonComplete(seasonId: string) {
+  // Determine the Super Bowl winner (champion)
+  let championTeamId: string | null = null;
+  const superBowlGames = await db
+    .select()
+    .from(games)
+    .where(
+      and(
+        eq(games.seasonId, seasonId),
+        eq(games.gameType, 'super_bowl'),
+        eq(games.status, 'completed')
+      )
+    )
+    .limit(1);
+
+  if (superBowlGames.length > 0) {
+    const sb = superBowlGames[0];
+    championTeamId =
+      (sb.homeScore ?? 0) >= (sb.awayScore ?? 0) ? sb.homeTeamId : sb.awayTeamId;
+  }
+
   await db
     .update(seasons)
     .set({
       status: 'offseason',
       completedAt: new Date(),
+      ...(championTeamId ? { championTeamId } : {}),
     })
     .where(eq(seasons.id, seasonId));
 
-  return {
-    message: 'Season complete! The offseason begins.',
-  };
+  let message = 'Season complete! The offseason begins.';
+  if (championTeamId) {
+    const champTeam = await db.select().from(teams).where(eq(teams.id, championTeamId)).limit(1);
+    if (champTeam[0]) {
+      message = `Season complete! The ${champTeam[0].city} ${champTeam[0].mascot} are Super Bowl champions!`;
+    }
+  }
+
+  return { message, championTeamId };
 }
 
 // ============================================================
@@ -1322,7 +1386,6 @@ async function estimateWeekGameTimes(
  * A 30-minute break separates the last game of one week from the first of the next.
  */
 async function projectFutureGameTimes(seasonId: string) {
-  const WEEK_BREAK_MS = 30 * 60 * 1000;
 
   // Get season info
   const seasonRows = await db
@@ -1355,8 +1418,8 @@ async function projectFutureGameTimes(seasonId: string) {
       .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime());
     if (completed.length > 0) {
       const lastCompleted = completed[0];
-      // Anchor = completedAt + intermission (15 min)
-      anchor = lastCompleted.completedAt!.getTime() + 15 * 60 * 1000;
+      // Anchor = completedAt + intermission
+      anchor = lastCompleted.completedAt!.getTime() + INTERMISSION_MS;
     }
   }
 

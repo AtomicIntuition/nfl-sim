@@ -18,9 +18,9 @@ interface PlaySceneProps {
 // ── Timing (exported for PlayersOverlay) ─────────────────────
 export const PRE_SNAP_MS = 1500;
 export const SNAP_MS = 400;
-export const DEVELOPMENT_MS = 2200;
-export const RESULT_MS = 600;
-export const POST_PLAY_MS = 500;
+export const DEVELOPMENT_MS = 3000;
+export const RESULT_MS = 800;
+export const POST_PLAY_MS = 300;
 const TOTAL_MS = PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS + RESULT_MS + POST_PLAY_MS;
 
 export type Phase = 'idle' | 'pre_snap' | 'snap' | 'development' | 'result' | 'post_play';

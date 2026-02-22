@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { games, gameEvents, seasons, teams } from '@/lib/db/schema';
 import { eq, asc, and, desc } from 'drizzle-orm';
+import { INTERMISSION_SECONDS, WEEK_BREAK_SECONDS, OFFSEASON_SECONDS } from '@/lib/scheduling/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -275,42 +276,61 @@ export async function GET(
 
               if (seasonRows.length > 0) {
                 const season = seasonRows[0];
-                // Find next scheduled game in the current week
-                const nextGames = await db
-                  .select()
-                  .from(games)
-                  .where(
-                    and(
-                      eq(games.seasonId, season.id),
-                      eq(games.week, season.currentWeek),
-                      eq(games.status, 'scheduled')
-                    )
-                  )
-                  .limit(1);
 
-                if (nextGames.length > 0) {
-                  const nextGame = nextGames[0];
-                  // Hydrate team abbreviations for the message
-                  const [homeTeamRows, awayTeamRows] = await Promise.all([
-                    db.select().from(teams).where(eq(teams.id, nextGame.homeTeamId)).limit(1),
-                    db.select().from(teams).where(eq(teams.id, nextGame.awayTeamId)).limit(1),
-                  ]);
-                  const homeAbbr = homeTeamRows[0]?.abbreviation ?? '???';
-                  const awayAbbr = awayTeamRows[0]?.abbreviation ?? '???';
+                // Check if the Super Bowl just ended
+                const isSuperBowlEnd =
+                  season.status === 'super_bowl' &&
+                  game.gameType === 'super_bowl';
 
+                if (isSuperBowlEnd) {
                   send({
                     type: 'intermission',
-                    message: `Up next: ${awayAbbr} @ ${homeAbbr}`,
-                    nextGameId: nextGame.id,
-                    countdown: 900, // 15 min intermission
+                    breakType: 'season',
+                    message: 'Season complete!',
+                    nextGameId: null,
+                    countdown: OFFSEASON_SECONDS,
                   });
                 } else {
-                  send({
-                    type: 'intermission',
-                    message: 'Week complete',
-                    nextGameId: null,
-                    countdown: 0,
-                  });
+                  // Find next scheduled game in the current week
+                  const nextGames = await db
+                    .select()
+                    .from(games)
+                    .where(
+                      and(
+                        eq(games.seasonId, season.id),
+                        eq(games.week, season.currentWeek),
+                        eq(games.status, 'scheduled')
+                      )
+                    )
+                    .limit(1);
+
+                  if (nextGames.length > 0) {
+                    const nextGame = nextGames[0];
+                    // Hydrate team abbreviations for the message
+                    const [homeTeamRows, awayTeamRows] = await Promise.all([
+                      db.select().from(teams).where(eq(teams.id, nextGame.homeTeamId)).limit(1),
+                      db.select().from(teams).where(eq(teams.id, nextGame.awayTeamId)).limit(1),
+                    ]);
+                    const homeAbbr = homeTeamRows[0]?.abbreviation ?? '???';
+                    const awayAbbr = awayTeamRows[0]?.abbreviation ?? '???';
+
+                    send({
+                      type: 'intermission',
+                      breakType: 'game',
+                      message: `Up next: ${awayAbbr} @ ${homeAbbr}`,
+                      nextGameId: nextGame.id,
+                      countdown: INTERMISSION_SECONDS,
+                    });
+                  } else {
+                    // No more games this week — week break
+                    send({
+                      type: 'intermission',
+                      breakType: 'week',
+                      message: `Week ${season.currentWeek} complete`,
+                      nextGameId: null,
+                      countdown: WEEK_BREAK_SECONDS,
+                    });
+                  }
                 }
               }
             } catch {

@@ -1043,14 +1043,61 @@ function GameOverWithRedirect({
   mvp: import('@/lib/simulation/types').PlayerGameStats | null;
 }) {
   const router = useRouter();
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  const minDisplayRef = useRef(false);
 
-  // Silent auto-redirect to homepage after 30 seconds
+  // Minimum display time of 15s before we allow redirect
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.push('/');
-    }, 30000);
+      minDisplayRef.current = true;
+    }, 15000);
     return () => clearTimeout(timer);
-  }, [router]);
+  }, []);
+
+  // Poll /api/game/current every 10s. Redirect when the game is confirmed completed
+  // and we've shown the summary for at least 15s.
+  useEffect(() => {
+    let cancelled = false;
+    const pollInterval = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch('/api/game/current');
+        if (!res.ok) return;
+        const data = await res.json();
+        // If there's no current live game, the game is officially completed
+        if (!data.currentGame && minDisplayRef.current) {
+          // Start a visible 5s countdown before redirect
+          setRedirectCountdown(5);
+        }
+      } catch {
+        // Ignore polling errors
+      }
+    }, 10000);
+
+    // Fallback: redirect after 60s regardless (prevents stuck state)
+    const fallback = setTimeout(() => {
+      if (!cancelled) setRedirectCountdown(5);
+    }, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollInterval);
+      clearTimeout(fallback);
+    };
+  }, []);
+
+  // Visible countdown → redirect
+  useEffect(() => {
+    if (redirectCountdown === null) return;
+    if (redirectCountdown <= 0) {
+      router.push('/');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setRedirectCountdown((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [redirectCountdown, router]);
 
   return (
     <div className="min-h-dvh">
@@ -1063,6 +1110,13 @@ function GameOverWithRedirect({
         mvp={gameOverMvp}
         nextGameCountdown={0}
       />
+      {redirectCountdown !== null && redirectCountdown > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div className="glass-card rounded-full px-5 py-2 text-sm text-text-secondary font-medium">
+            Returning to lobby in {redirectCountdown}...
+          </div>
+        </div>
+      )}
     </div>
   );
 }

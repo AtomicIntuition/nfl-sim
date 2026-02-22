@@ -630,11 +630,23 @@ export function PlayersOverlay({
       const isCB = p.role === 'CB' || p.role === 'NCB';
       const isS = p.role === 'S';
 
-      // ── Pass plays — DL rushes, DBs cover ──
+      // ── Pass plays — two-phase: coverage pre-throw, pursuit post-throw ──
       if (playType === 'pass_complete' || playType === 'pass_incomplete' || playType === 'sack') {
+        const isCatchPhase = t >= 0.35 && playType === 'pass_complete';
+
         if (isDL) {
-          // DL rushes hard toward QB
           const rushDist = playType === 'sack' ? 8 : 5;
+          if (isCatchPhase) {
+            // Post-catch: DL pursue ball carrier
+            const preX = p.x + offDir * rushDist * easeOutCubic(0.35);
+            const pursuitT = (t - 0.35) / 0.65;
+            return {
+              ...p,
+              x: clamp(lerp(preX, toX, 0.4 * easeOutCubic(pursuitT)), 2, 98),
+              y: clamp(lerp(p.y, 50, 0.3 * pursuitT), 5, 95),
+              role: p.role,
+            };
+          }
           return {
             ...p,
             x: clamp(p.x + offDir * rushDist * eased, 2, 98),
@@ -643,7 +655,18 @@ export function PlayersOverlay({
           };
         }
         if (isLB) {
-          // LBs drop into zone or creep toward LOS
+          if (isCatchPhase) {
+            // Post-catch: LBs pursue laterally toward ball
+            const preX = p.x - offDir * 3 * easeOutCubic(0.35);
+            const preY = p.y + Math.sin(0.35 * 3 + i * 2) * 2;
+            const pursuitT = (t - 0.35) / 0.65;
+            return {
+              ...p,
+              x: clamp(lerp(preX, toX, 0.5 * easeOutCubic(pursuitT)), 2, 98),
+              y: clamp(lerp(preY, 50, 0.4 * pursuitT), 5, 95),
+              role: p.role,
+            };
+          }
           return {
             ...p,
             x: clamp(p.x - offDir * 3 * eased, 2, 98),
@@ -652,7 +675,18 @@ export function PlayersOverlay({
           };
         }
         if (isCB) {
-          // CBs backpedal with WRs
+          if (isCatchPhase) {
+            // Post-catch: CBs break toward catch point
+            const preX = p.x - offDir * 5 * easeOutCubic(0.35);
+            const preY = p.y + Math.sin(0.35 * 4 + i) * 3;
+            const pursuitT = (t - 0.35) / 0.65;
+            return {
+              ...p,
+              x: clamp(lerp(preX, toX, 0.6 * easeOutCubic(pursuitT)), 2, 98),
+              y: clamp(lerp(preY, 50, 0.5 * pursuitT), 5, 95),
+              role: p.role,
+            };
+          }
           return {
             ...p,
             x: clamp(p.x - offDir * 5 * eased, 2, 98),
@@ -661,7 +695,17 @@ export function PlayersOverlay({
           };
         }
         if (isS) {
-          // Safeties drop deep into coverage
+          if (isCatchPhase) {
+            // Post-catch: Safeties angle down toward ball
+            const preX = p.x - offDir * 6 * easeOutCubic(0.35);
+            const pursuitT = (t - 0.35) / 0.65;
+            return {
+              ...p,
+              x: clamp(lerp(preX, toX, 0.55 * easeOutCubic(pursuitT)), 2, 98),
+              y: clamp(lerp(p.y, 50, 0.45 * pursuitT), 5, 95),
+              role: p.role,
+            };
+          }
           return {
             ...p,
             x: clamp(p.x - offDir * 6 * eased, 2, 98),
@@ -673,12 +717,12 @@ export function PlayersOverlay({
       // ── Run plays — everyone pursues the ball ──
       if (playType === 'run' || playType === 'scramble' || playType === 'two_point') {
         const ballX = lerp(fromX, toX, eased);
-        const pursuitSpeed = isDL ? 0.45 : isLB ? 0.55 : isCB ? 0.4 : 0.35;
+        const pursuitSpeed = isDL ? 0.6 : isLB ? 0.7 : isCB ? 0.55 : 0.5;
 
         return {
           ...p,
           x: clamp(lerp(p.x, ballX, pursuitSpeed * eased), 2, 98),
-          y: clamp(lerp(p.y, 50, 0.35 * eased), 5, 95),
+          y: clamp(lerp(p.y, 50, 0.45 * eased), 5, 95),
           role: p.role,
         };
       }
@@ -794,9 +838,9 @@ export function PlayersOverlay({
   if (gameStatus === 'pregame' || gameStatus === 'game_over') return null;
 
   // Use CSS transitions for non-RAF phases
-  // Pre-snap: 600ms transition → formation holds for ~900ms before snap
+  // Pre-snap: 900ms transition → smooth formation set with stagger feel
   const useTransition = phase === 'pre_snap' || phase === 'snap' || phase === 'post_play' || phase === 'idle';
-  const transMs = phase === 'pre_snap' ? 600 : phase === 'snap' ? 300 : 400;
+  const transMs = phase === 'pre_snap' ? 900 : phase === 'snap' ? 300 : 400;
   const transitionStyle = useTransition ? `left ${transMs}ms ease-out, top ${transMs}ms ease-out` : 'none';
 
   const logoUrl = teamAbbreviation ? getTeamLogoUrl(teamAbbreviation) : null;
@@ -818,6 +862,8 @@ export function PlayersOverlay({
         const isOL = role === 'C' || role === 'LG' || role === 'RG' || role === 'LT' || role === 'RT';
         const isSkill = role === 'WR' || role === 'TE' || role === 'RB' || role === 'FB';
         const dotSize = isOL ? 11 : isSkill ? 9 : (role === 'QB' ? 10 : 9);
+        // Stagger: OL moves first (0ms), QB next (80ms), skill last (150ms)
+        const staggerDelay = phase === 'pre_snap' ? (isOL ? '0ms' : role === 'QB' ? '80ms' : '150ms') : '0ms';
         return (
           <div
             key={`off-${i}`}
@@ -828,6 +874,7 @@ export function PlayersOverlay({
               transform: 'translate(-50%, -50%)',
               zIndex: showLogo ? 6 : 3,
               transition: transitionStyle,
+              transitionDelay: staggerDelay,
             }}
           >
             {/* Team logo carrier (shown on QB/ball carrier) */}
@@ -864,13 +911,13 @@ export function PlayersOverlay({
               className={`carrier-dot ${isOL ? 'rounded-sm' : 'rounded-full'} ${isCarrier && !showLogo ? 'player-carrier-pulse' : ''}`}
               style={{
                 display: showLogo && logoUrl ? 'none' : 'block',
-                width: isCarrier ? 12 : dotSize,
-                height: isCarrier ? 12 : dotSize,
+                width: isCarrier ? 14 : dotSize,
+                height: isCarrier ? 14 : dotSize,
                 backgroundColor: offenseColor,
-                opacity: isCarrier ? 1.0 : 0.85,
+                opacity: isCarrier ? 1.0 : 0.8,
                 border: isOL ? `1px solid rgba(255,255,255,0.3)` : 'none',
                 boxShadow: isCarrier
-                  ? `0 0 10px ${offenseColor}`
+                  ? `0 0 12px 4px ${offenseColor}`
                   : `0 0 5px ${offenseColor}80`,
               }}
             />

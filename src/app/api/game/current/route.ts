@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { games, seasons, teams } from '@/lib/db/schema';
 import { eq, desc, and } from 'drizzle-orm';
+import { INTERMISSION_MS } from '@/lib/scheduling/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -132,8 +133,7 @@ export async function GET() {
     const completedThisWeek = weekGames.filter((g) => g.status === 'completed').length;
     const totalThisWeek = weekGames.length;
 
-    // Intermission timing: check for recently completed game within 15-min window
-    const INTERMISSION_MS = 15 * 60 * 1000;
+    // Intermission timing: check for recently completed game within intermission window
     let intermission: { endsAt: string; remainingSeconds: number } | null = null;
 
     if (!currentGame) {

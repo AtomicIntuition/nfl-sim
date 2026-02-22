@@ -56,11 +56,16 @@ export interface BroadcastState {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Minimum time (in ms) between the end of one season and the start of the next. */
-const OFFSEASON_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+import {
+  OFFSEASON_MS,
+  INTERMISSION_SECONDS as SHARED_INTERMISSION_SECONDS,
+} from './constants';
 
-/** Standard intermission between games within a week (in seconds). */
-const INTERMISSION_SECONDS = 60;
+/** @deprecated Use OFFSEASON_MS from scheduling/constants instead */
+const OFFSEASON_DURATION_MS = OFFSEASON_MS;
+
+/** @deprecated Use INTERMISSION_SECONDS from scheduling/constants instead */
+const INTERMISSION_SECONDS = SHARED_INTERMISSION_SECONDS;
 
 /** Countdown displayed before the very first game of a week (in seconds). */
 const UPCOMING_COUNTDOWN_SECONDS = 120;
@@ -77,6 +82,11 @@ const REGULAR_SEASON_WEEKS = 18;
  *
  * This is a pure function: it only reads the season state and returns
  * an action descriptor. The caller must execute the action.
+ *
+ * @deprecated Not called anywhere. The actual state machine logic lives
+ * inline in `src/app/api/simulate/route.ts` determineNextAction().
+ * Kept for reference/testing. Constants have been updated to match
+ * the values in `scheduling/constants.ts`.
  *
  * @param season - The current season, or null if no season exists
  * @returns A SchedulerAction describing the next step
@@ -314,6 +324,10 @@ function formatRoundName(status: string): string {
  *
  * This tells the front-end whether a game is live, in intermission,
  * upcoming, or if the platform is in an offseason state.
+ *
+ * @deprecated Not called anywhere. The homepage builds its own broadcast
+ * state inline in `src/app/page.tsx` getHomePageData(). Kept for
+ * reference/testing.
  *
  * @param season - The current season, or null if none exists
  * @returns A BroadcastState object for the UI

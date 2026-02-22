@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
 import { db } from '@/lib/db';
-import { games, seasons, teams, standings } from '@/lib/db/schema';
+import { games, seasons, teams, standings, gameEvents } from '@/lib/db/schema';
 import { eq, desc, and } from 'drizzle-orm';
+import { INTERMISSION_MS, WEEK_BREAK_MS } from '@/lib/scheduling/constants';
 import { Header } from '@/components/layout/header';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -45,9 +46,26 @@ async function getHomePageData() {
     );
 
   // Find broadcasting or next featured game
-  const liveGame =
+  // Check for stale broadcasts: if broadcasting duration exceeds last event + 60s buffer,
+  // treat as completed for display purposes (avoids showing a "live" game that's done streaming)
+  let liveGame =
     weekGames.find((g) => g.status === 'broadcasting') ??
     weekGames.find((g) => g.status === 'simulating');
+
+  if (liveGame?.status === 'broadcasting' && liveGame.broadcastStartedAt) {
+    const broadcastDuration = Date.now() - new Date(liveGame.broadcastStartedAt).getTime();
+    const lastEvent = await db
+      .select()
+      .from(gameEvents)
+      .where(eq(gameEvents.gameId, liveGame.id))
+      .orderBy(desc(gameEvents.displayTimestamp))
+      .limit(1);
+    const gameDurationMs = lastEvent[0]?.displayTimestamp ?? 0;
+    if (broadcastDuration >= gameDurationMs + 60_000) {
+      // Broadcast is stale — skip it as liveGame so homepage falls through to intermission
+      liveGame = undefined;
+    }
+  }
 
   const nextGame =
     weekGames.find((g) => g.isFeatured && g.status === 'scheduled') ??
@@ -116,8 +134,7 @@ async function getHomePageData() {
   ).length;
   const totalCount = weekGames.length;
 
-  // Intermission detection: 15-min window after the most recent game completes
-  const INTERMISSION_MS = 15 * 60 * 1000;
+  // Intermission detection: window after the most recent game completes
   const recentCompleted = weekGames
     .filter((g) => g.status === 'completed' && g.completedAt)
     .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())[0];
@@ -164,8 +181,7 @@ async function getHomePageData() {
     }
   }
 
-  // Inter-week break detection: all games done, waiting 30 min before next week
-  const WEEK_BREAK_MS = 30 * 60 * 1000;
+  // Inter-week break detection: all games done, waiting before next week
   const allWeekCompleted =
     weekGames.length > 0 && weekGames.every((g) => g.status === 'completed');
 
