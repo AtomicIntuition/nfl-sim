@@ -48,31 +48,31 @@ export function DownDistanceOverlay({
 
   return (
     <>
-      {/* Yellow first-down zone */}
+      {/* Yellow first-down zone — brighter */}
       {zoneWidth > 0.5 && (
         <div
           className="absolute top-0 bottom-0 pointer-events-none"
           style={{
             left: `${leftBound}%`,
             width: `${zoneWidth}%`,
-            background: 'rgba(251, 191, 36, 0.1)',
+            background: 'rgba(251, 191, 36, 0.13)',
           }}
         />
       )}
 
-      {/* Line of scrimmage — blue */}
+      {/* Line of scrimmage — brighter blue with enhanced glow */}
       <div
         className="absolute top-0 bottom-0 pointer-events-none"
         style={{
           left: `${ballLeftPercent}%`,
           width: '2.5px',
           transform: 'translateX(-50%)',
-          background: '#3b82f6',
-          boxShadow: '0 0 8px rgba(59, 130, 246, 0.6), 0 0 16px rgba(59, 130, 246, 0.3)',
+          background: '#60a5fa',
+          boxShadow: '0 0 8px rgba(96, 165, 250, 0.7), 0 0 16px rgba(96, 165, 250, 0.4), 0 0 32px rgba(59, 130, 246, 0.2)',
         }}
       />
 
-      {/* First down line — yellow */}
+      {/* First down line — brighter gold with enhanced glow */}
       {!isGoalToGo && firstDownLeftPercent > 0 && firstDownLeftPercent < 100 && (
         <div
           className="absolute top-0 bottom-0 pointer-events-none"
@@ -80,13 +80,13 @@ export function DownDistanceOverlay({
             left: `${firstDownLeftPercent}%`,
             width: '2.5px',
             transform: 'translateX(-50%)',
-            background: '#fbbf24',
-            boxShadow: '0 0 12px rgba(251, 191, 36, 0.8), 0 0 24px rgba(251, 191, 36, 0.4)',
+            background: '#fcd34d',
+            boxShadow: '0 0 10px rgba(252, 211, 77, 0.9), 0 0 20px rgba(251, 191, 36, 0.5), 0 0 40px rgba(251, 191, 36, 0.2)',
           }}
         />
       )}
 
-      {/* Down & distance badge — positioned above field at LOS */}
+      {/* Down & distance badge — glass-morphism with glow border */}
       <div
         className="absolute pointer-events-none z-30"
         style={{
@@ -95,7 +95,15 @@ export function DownDistanceOverlay({
           transform: 'translateX(-50%)',
         }}
       >
-        <div className="bg-black/70 backdrop-blur-sm rounded px-2 py-0.5 border border-white/10">
+        <div
+          className="rounded px-2 py-0.5"
+          style={{
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(212, 175, 55, 0.25)',
+            boxShadow: '0 0 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+          }}
+        >
           <span className="text-[10px] sm:text-xs font-mono font-black text-white whitespace-nowrap">
             {downText}
           </span>

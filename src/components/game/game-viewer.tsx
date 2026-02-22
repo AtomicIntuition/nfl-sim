@@ -13,7 +13,7 @@ import { buildLiveBoxScore } from '@/lib/utils/live-box-score';
 import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 import { ScoreBug } from '@/components/game/scorebug';
 import { PlayFeed } from '@/components/game/play-feed';
-import { FieldVisual3D } from '@/components/game/field3d/field-visual-3d';
+import { FieldVisual } from '@/components/game/field-visual';
 import { MomentumMeter } from '@/components/game/momentum-meter';
 import { BoxScore } from '@/components/game/box-score';
 import { GameOverSummary } from '@/components/game/game-over-summary';
@@ -316,7 +316,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
           {/* Field — fixed aspect on mobile so it's always visible */}
           <div className="h-[240px] sm:h-[300px] lg:flex-1 lg:h-auto lg:min-h-0 relative">
             <JumbotronOverlay />
-            <FieldVisual3D
+            <FieldVisual
               ballPosition={gameState.ballPosition}
               firstDownLine={firstDownLine}
               possession={gameState.possession}
@@ -341,7 +341,6 @@ export function GameViewer({ gameId }: GameViewerProps) {
               driveStartPosition={driveStartPosition}
               narrativeContext={currentEvent?.narrativeContext ?? null}
               commentary={delayedCommentary}
-              weather={gameState.weather ?? null}
             />
           </div>
 

@@ -527,21 +527,39 @@ body {
   animation: td-flash 0.4s ease-out forwards;
 }
 
-/* ─── Touchdown Text Pulse ─── */
-@keyframes td-text-pulse {
+/* ─── Touchdown Screen Flash (bright white burst) ─── */
+@keyframes td-screen-flash {
+  0% {
+    opacity: 0.9;
+  }
+  30% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ─── Touchdown Text Entrance (scale + fade) ─── */
+@keyframes td-text-entrance {
   0% {
     transform: scale(0.3);
     opacity: 0;
   }
-  40% {
-    transform: scale(1.15);
+  100% {
+    transform: scale(1);
     opacity: 1;
   }
-  60% {
-    transform: scale(0.95);
+}
+
+/* ─── Touchdown Text Pulse ─── */
+@keyframes td-text-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
   }
-  80% {
-    transform: scale(1.05);
+  50% {
+    transform: scale(1.08);
   }
   100% {
     transform: scale(1);

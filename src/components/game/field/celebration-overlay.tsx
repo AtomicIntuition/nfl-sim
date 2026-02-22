@@ -49,24 +49,34 @@ export function CelebrationOverlay({ type, teamColor, celebKey }: CelebrationOve
 
 function TouchdownCelebration({ teamColor }: { teamColor: string }) {
   const confettiPieces = useMemo(() => (
-    Array.from({ length: 50 }, (_, i) => ({
+    Array.from({ length: 60 }, (_, i) => ({
       id: i,
       left: Math.random() * 100,
       delay: Math.random() * 0.8,
       duration: 1.5 + Math.random() * 1,
       color: [teamColor, '#ffd700', '#ffffff', '#d4af37'][i % 4],
-      size: 4 + Math.random() * 6,
+      size: 4 + Math.random() * 7,
       rotation: Math.random() * 360,
       drift: (Math.random() - 0.5) * 60,
+      glow: i % 3 === 0, // every 3rd piece glows
     }))
   ), [teamColor]);
 
   return (
     <>
-      {/* White flash */}
+      {/* Bright white screen flash — brief burst before team color wash */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'white',
+          animation: 'td-screen-flash 0.4s ease-out forwards',
+        }}
+      />
+
+      {/* Team color wash */}
       <div className="absolute inset-0 td-flash-anim" />
 
-      {/* Confetti */}
+      {/* Confetti with glow effect */}
       {confettiPieces.map((piece) => (
         <div
           key={piece.id}
@@ -80,15 +90,21 @@ function TouchdownCelebration({ teamColor }: { teamColor: string }) {
             borderRadius: piece.id % 3 === 0 ? '50%' : '1px',
             animationDelay: `${piece.delay}s`,
             animationDuration: `${piece.duration}s`,
+            boxShadow: piece.glow ? `0 0 6px ${piece.color}, 0 0 12px ${piece.color}40` : 'none',
             '--confetti-drift': `${piece.drift}px`,
             '--confetti-rotation': `${piece.rotation}deg`,
           } as React.CSSProperties}
         />
       ))}
 
-      {/* "TOUCHDOWN!" text */}
+      {/* "TOUCHDOWN!" text with scale+fade entrance */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="td-text-pulse-anim text-3xl sm:text-5xl lg:text-6xl font-black tracking-wider super-bowl-text">
+        <span
+          className="td-text-pulse-anim text-3xl sm:text-5xl lg:text-6xl font-black tracking-wider super-bowl-text"
+          style={{
+            animation: 'td-text-entrance 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, td-text-pulse 1.5s ease-in-out 0.5s infinite',
+          }}
+        >
           TOUCHDOWN!
         </span>
       </div>

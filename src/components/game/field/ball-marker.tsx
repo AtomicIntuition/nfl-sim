@@ -53,43 +53,59 @@ export function BallMarker({
       }}
     >
       <div className="relative flex flex-col items-center">
-        {/* Pulse ring */}
+        {/* LED-style radial glow background */}
         {!hidden && (
           <div
-            className="absolute rounded-full animate-[ball-pulse_2s_ease-in-out_infinite]"
+            className="absolute rounded-full"
             style={{
-              width: 20,
-              height: 20,
+              width: 32,
+              height: 32,
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              border: '1.5px solid rgba(255, 255, 255, 0.3)',
-              opacity: 0.4,
+              background: 'radial-gradient(circle, rgba(212, 175, 55, 0.25) 0%, rgba(212, 175, 55, 0.08) 40%, transparent 70%)',
             }}
           />
         )}
 
-        {/* Neutral dot */}
+        {/* Outer pulse ring — gold glow */}
+        {!hidden && (
+          <div
+            className="absolute rounded-full animate-[ball-pulse_2s_ease-in-out_infinite]"
+            style={{
+              width: 26,
+              height: 26,
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              border: '1.5px solid rgba(212, 175, 55, 0.4)',
+              boxShadow: '0 0 8px rgba(212, 175, 55, 0.3)',
+              opacity: 0.5,
+            }}
+          />
+        )}
+
+        {/* Main marker dot — larger, with gold glow */}
         <div
           className="rounded-full"
           style={{
-            width: 10,
-            height: 10,
-            background: 'radial-gradient(circle at 35% 35%, #e2e8f0, #94a3b8)',
-            boxShadow: '0 0 6px rgba(255,255,255,0.3), 0 1px 3px rgba(0,0,0,0.5)',
+            width: 13,
+            height: 13,
+            background: 'radial-gradient(circle at 35% 35%, #f0e6cc, #d4af37, #b8942e)',
+            boxShadow: '0 0 10px rgba(212, 175, 55, 0.5), 0 0 4px rgba(255,255,255,0.4), 0 1px 3px rgba(0,0,0,0.5)',
           }}
         />
 
         {/* Small football accent below */}
         <div
           style={{
-            width: 8,
-            height: 5,
+            width: 9,
+            height: 6,
             borderRadius: '50%',
             background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
             border: '0.5px solid #5C2D06',
             marginTop: 2,
-            opacity: 0.6,
+            opacity: 0.7,
             transform: direction === 'right' ? 'rotate(-15deg)' : direction === 'left' ? 'rotate(15deg)' : 'none',
             transition: 'transform 400ms ease-out',
           }}

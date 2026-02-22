@@ -233,6 +233,23 @@ export function FieldVisual({
 
   const opposingTeam = possession === 'home' ? awayTeam : homeTeam;
 
+  // ── Big play border pulse ────────────────────────────────
+  const [borderPulse, setBorderPulse] = useState(false);
+  useEffect(() => {
+    if (!lastPlay) return;
+    const isBig =
+      lastPlay.isTouchdown ||
+      lastPlay.turnover != null ||
+      lastPlay.type === 'sack' ||
+      (lastPlay.type === 'pass_complete' && lastPlay.yardsGained > 20) ||
+      (lastPlay.type === 'run' && lastPlay.yardsGained > 15);
+    if (isBig) {
+      setBorderPulse(true);
+      const timer = setTimeout(() => setBorderPulse(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastPlay]);
+
   // ── SkyCam broadcast camera ─────────────────────────────
   const [skyCamEnabled, setSkyCamEnabled] = useState(false);
   const [cameraFlash, setCameraFlash] = useState(false);
@@ -348,12 +365,32 @@ export function FieldVisual({
   return (
     <div className="w-full h-full px-1.5 py-1">
       <div
-        className="field-container relative w-full h-full rounded-xl overflow-hidden border border-white/10"
+        className="field-container relative w-full h-full rounded-xl overflow-hidden"
         role="img"
         aria-label={`Football field. Ball at the ${ballPosition} yard line. ${down}${
           down === 1 ? 'st' : down === 2 ? 'nd' : down === 3 ? 'rd' : 'th'
         } and ${yardsToGo}.`}
+        style={{
+          border: borderPulse
+            ? '1.5px solid rgba(212, 175, 55, 0.6)'
+            : '1.5px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: borderPulse
+            ? '0 0 16px rgba(212, 175, 55, 0.3), inset 0 0 16px rgba(212, 175, 55, 0.05)'
+            : 'none',
+          transition: 'border-color 300ms ease-out, box-shadow 300ms ease-out',
+        }}
       >
+        {/* Digital grid texture overlay */}
+        <div
+          className="absolute inset-0 z-[25] pointer-events-none"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
+            `,
+            backgroundSize: '20px 20px',
+          }}
+        />
         {/* Perspective wrapper for 3D depth effect */}
         <div
           className="field-perspective absolute inset-0"
