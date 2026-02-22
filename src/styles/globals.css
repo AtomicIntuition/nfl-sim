@@ -386,7 +386,6 @@ body {
 /* ─── Field Container & Perspective ─── */
 .field-container {
   perspective: 1200px;
-  background: rgba(10, 15, 25, 0.95);
 }
 
 .field-perspective {
@@ -906,6 +905,74 @@ body {
   0% { opacity: 0; transform: scale(0.3); }
   60% { opacity: 1; transform: scale(1.2); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * LED GRID OVERLAY — Full-Field Player Cells
+ * ═══════════════════════════════════════════════════════════ */
+
+/* Faint grid-line pattern covering the full field */
+.led-grid-lines {
+  background:
+    repeating-linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent calc(100% / 120)
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent calc(100% / 53)
+    );
+  pointer-events: none;
+}
+
+/* Base LED cell — absolutely positioned, centered on its grid coordinate */
+.led-cell {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+/* Player cell — slightly larger than grid, visible glow */
+.led-cell--player {
+  z-index: 5;
+  border-radius: 50%;
+  min-width: 4px;
+  min-height: 4px;
+}
+
+/* Lineman cells — square instead of round */
+.led-cell--player-ol {
+  border-radius: 2px;
+}
+
+/* Trail cell — smaller, sits behind players */
+.led-cell--trail {
+  z-index: 3;
+  border-radius: 50%;
+}
+
+/* Ball carrier — larger with glow pulse */
+.led-cell--ball-carrier {
+  z-index: 6;
+  animation: led-carrier-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes led-carrier-pulse {
+  0%, 100% {
+    filter: brightness(1);
+    box-shadow: 0 0 6px currentColor;
+  }
+  50% {
+    filter: brightness(1.4);
+    box-shadow: 0 0 14px currentColor, 0 0 24px currentColor;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════

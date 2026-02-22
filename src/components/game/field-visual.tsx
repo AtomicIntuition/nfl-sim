@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { PlayResult, NarrativeSnapshot } from '@/lib/simulation/types';
+import { FieldSurface } from './field/field-surface';
 import { LedGrid } from './field/led-grid';
 import { CoinFlip } from './field/coin-flip';
 import { CelebrationOverlay } from './field/celebration-overlay';
@@ -185,7 +186,6 @@ export function FieldVisual({
           down === 1 ? 'st' : down === 2 ? 'nd' : down === 3 ? 'rd' : 'th'
         } and ${yardsToGo}.`}
         style={{
-          background: 'rgba(10, 15, 25, 0.95)',
           border: borderPulse
             ? '1.5px solid rgba(212, 175, 55, 0.6)'
             : '1.5px solid rgba(255, 255, 255, 0.08)',
@@ -195,7 +195,10 @@ export function FieldVisual({
           transition: 'border-color 300ms ease-out, box-shadow 300ms ease-out',
         }}
       >
-        {/* LED Grid Board */}
+        {/* Green field background (z-0) */}
+        <FieldSurface homeTeam={homeTeam} awayTeam={awayTeam} possession={possession} />
+
+        {/* LED grid overlay with player cells (z-10) */}
         <LedGrid
           ballPosition={ballPosition}
           firstDownLine={firstDownLine}

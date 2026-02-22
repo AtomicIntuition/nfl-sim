@@ -15,19 +15,25 @@ import {
   getKickoffDevMs,
 } from './play-timing';
 import type { Phase } from './play-timing';
+import {
+  GRID_COLS,
+  GRID_ROWS,
+  fieldPctToGrid,
+  gridToCss,
+  yardPosToCol,
+  yardPosToFieldPct,
+} from './grid-coords';
+import {
+  OFFENSIVE_FORMATIONS,
+  DEFENSIVE_FORMATIONS,
+  SPECIAL_TEAMS,
+  getAbsolutePositions,
+  getIdlePositions,
+} from './formation-data';
 
-// ── Grid dimensions ────────────────────────────────────────
-const COLS = 120; // 10 away EZ + 100 field + 10 home EZ
-const ROWS = 5;
-const TOTAL_CELLS = COLS * ROWS;
-
-// ── Colors ─────────────────────────────────────────────────
-const OFF_COLOR = '#0a0f19';
-const LOS_COLOR = '#60a5fa';
-const FIRST_DOWN_COLOR = '#fcd34d';
-const TURNOVER_COLOR = '#f59e0b';
-const INCOMPLETE_COLOR = '#ef4444';
-const KICK_COLOR = '#fbbf24';
+// ── Constants ───────────────────────────────────────────────
+const MAX_TRAIL_CELLS = 30;
+const LINEMEN_ROLES = new Set(['C', 'LG', 'RG', 'LT', 'RT', 'DT', 'DE', 'NT', 'LS']);
 
 interface LedGridProps {
   ballPosition: number;
@@ -49,16 +55,18 @@ interface LedGridProps {
 
 // ── Coordinate helpers ─────────────────────────────────────
 
-/** Convert a field position (0-100, relative to possessing team) to an absolute column (0-119) */
-function posToCol(pos: number, possession: 'home' | 'away'): number {
-  const absolutePct = possession === 'home' ? 100 - pos : pos;
-  return Math.round(absolutePct) + 10; // offset for away end zone
-}
-
-/** Clamp a value between min and max */
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
+
+/** Convert yard position to absolute column */
+function posToCol(pos: number, possession: 'home' | 'away'): number {
+  return yardPosToCol(pos, possession);
+}
+
+// ── Cell sizing ─────────────────────────────────────────────
+function cellWidthPct(): number { return 100 / GRID_COLS; }
+function cellHeightPct(): number { return 100 / GRID_ROWS; }
 
 // ══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -81,43 +89,121 @@ export function LedGrid({
   onPhaseChange,
   onAnimating,
 }: LedGridProps) {
-  // ── Stable refs for callbacks ───────────────────────────────
+  // ── Stable refs ───────────────────────────────────────────
   const onPhaseChangeRef = useRef(onPhaseChange);
   onPhaseChangeRef.current = onPhaseChange;
   const onAnimatingRef = useRef(onAnimating);
   onAnimatingRef.current = onAnimating;
 
-  // ── State ───────────────────────────────────────────────────
+  // ── State ─────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('idle');
-  const [animCol, setAnimCol] = useState<number | null>(null); // head column during animation
-  const [animStartCol, setAnimStartCol] = useState<number | null>(null);
-  const [animEndCol, setAnimEndCol] = useState<number | null>(null);
-  const [outcomeEffect, setOutcomeEffect] = useState<'td' | 'turnover' | 'incomplete' | 'sack' | 'fg_good' | 'fg_miss' | null>(null);
-  const [kickSweepCol, setKickSweepCol] = useState<number | null>(null); // for kick animation gold sweep
+  const [outcomeEffect, setOutcomeEffect] = useState<
+    'td' | 'turnover' | 'incomplete' | 'sack' | 'fg_good' | 'fg_miss' | null
+  >(null);
 
-  // Drive trail: columns covered in current drive
+  // Drive trail columns
   const [driveTrailCols, setDriveTrailCols] = useState<Set<number>>(new Set());
+
+  // Trail cells for current play animation
+  const [trailCells, setTrailCells] = useState<{ col: number; row: number }[]>([]);
 
   const prevKeyRef = useRef(playKey);
   const prevPossessionRef = useRef(possession);
   const animFrameRef = useRef(0);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // ── Derived columns ─────────────────────────────────────────
+  // Refs for player cell DOM manipulation
+  const offenseRefs = useRef<(HTMLDivElement | null)[]>(Array(11).fill(null));
+  const defenseRefs = useRef<(HTMLDivElement | null)[]>(Array(11).fill(null));
+  const ballCarrierIdxRef = useRef(5); // Default: QB (index 5 in most formations)
+
+  // ── Derived values ────────────────────────────────────────
   const losCol = posToCol(ballPosition, possession);
   const fdCol = posToCol(Math.min(firstDownLine, 100), possession);
-  const driveStartCol = posToCol(driveStartPosition, possession);
   const possTeam = possession === 'home' ? homeTeam : awayTeam;
   const oppTeam = possession === 'home' ? awayTeam : homeTeam;
+  const offDir = possession === 'away' ? 1 : -1;
 
-  // ── Update phase helper ─────────────────────────────────────
+  // LOS as field container percentage
+  const losFieldPct = yardPosToFieldPct(ballPosition, possession);
+
+  // ── Update phase helper ───────────────────────────────────
   const updatePhase = useCallback((p: Phase) => {
     setPhase(p);
     onPhaseChangeRef.current(p);
   }, []);
 
-  // ── Drive trail management ──────────────────────────────────
-  // Reset drive trail on possession change / kickoff
+  // ── Formation data ────────────────────────────────────────
+  const { offenseFormation, defenseFormation, isSpecialTeams } = useMemo(() => {
+    if (!lastPlay) {
+      return {
+        offenseFormation: OFFENSIVE_FORMATIONS['shotgun'],
+        defenseFormation: DEFENSIVE_FORMATIONS['base_4_3'],
+        isSpecialTeams: false,
+      };
+    }
+
+    // Special teams
+    if (lastPlay.type === 'kickoff') {
+      return {
+        offenseFormation: SPECIAL_TEAMS.kickoff.kicking,
+        defenseFormation: SPECIAL_TEAMS.kickoff.receiving,
+        isSpecialTeams: true,
+      };
+    }
+    if (lastPlay.type === 'punt') {
+      return {
+        offenseFormation: SPECIAL_TEAMS.punt.kicking,
+        defenseFormation: SPECIAL_TEAMS.punt.receiving,
+        isSpecialTeams: true,
+      };
+    }
+    if (lastPlay.type === 'field_goal' || lastPlay.type === 'extra_point') {
+      return {
+        offenseFormation: SPECIAL_TEAMS.field_goal.kicking,
+        defenseFormation: SPECIAL_TEAMS.field_goal.blocking,
+        isSpecialTeams: true,
+      };
+    }
+
+    const offForm = lastPlay.formation && OFFENSIVE_FORMATIONS[lastPlay.formation]
+      ? OFFENSIVE_FORMATIONS[lastPlay.formation]
+      : OFFENSIVE_FORMATIONS['shotgun'];
+
+    const defPers = lastPlay.defensiveCall?.personnel && DEFENSIVE_FORMATIONS[lastPlay.defensiveCall.personnel]
+      ? DEFENSIVE_FORMATIONS[lastPlay.defensiveCall.personnel]
+      : DEFENSIVE_FORMATIONS['base_4_3'];
+
+    return { offenseFormation: offForm, defenseFormation: defPers, isSpecialTeams: false };
+  }, [lastPlay]);
+
+  // ── Position calculations ─────────────────────────────────
+
+  // Absolute formation positions (field %)
+  const offensePositions = useMemo(() => {
+    return getAbsolutePositions(offenseFormation, losFieldPct, offDir, 'offense');
+  }, [offenseFormation, losFieldPct, offDir]);
+
+  const defensePositions = useMemo(() => {
+    return getAbsolutePositions(defenseFormation, losFieldPct, offDir, 'defense');
+  }, [defenseFormation, losFieldPct, offDir]);
+
+  // Idle (huddle) positions
+  const offenseIdlePositions = useMemo(() => {
+    return getIdlePositions(losFieldPct, offDir, 'offense');
+  }, [losFieldPct, offDir]);
+
+  const defenseIdlePositions = useMemo(() => {
+    return getIdlePositions(losFieldPct, offDir, 'defense');
+  }, [losFieldPct, offDir]);
+
+  // Convert positions to grid cells
+  const offenseGridIdle = useMemo(() => offenseIdlePositions.map(p => fieldPctToGrid(p.x, p.y)), [offenseIdlePositions]);
+  const defenseGridIdle = useMemo(() => defenseIdlePositions.map(p => fieldPctToGrid(p.x, p.y)), [defenseIdlePositions]);
+  const offenseGridForm = useMemo(() => offensePositions.map(p => fieldPctToGrid(p.x, p.y)), [offensePositions]);
+  const defenseGridForm = useMemo(() => defensePositions.map(p => fieldPctToGrid(p.x, p.y)), [defensePositions]);
+
+  // ── Drive trail management ────────────────────────────────
   useEffect(() => {
     if (possession !== prevPossessionRef.current) {
       setDriveTrailCols(new Set());
@@ -131,7 +217,37 @@ export function LedGrid({
     }
   }, [isKickoff, isPatAttempt]);
 
-  // ── Detect new play → run animation ─────────────────────────
+  // ── Position player cells via DOM refs ────────────────────
+  const positionPlayers = useCallback((
+    offPositions: { col: number; row: number }[],
+    defPositions: { col: number; row: number }[],
+  ) => {
+    for (let i = 0; i < 11; i++) {
+      const offEl = offenseRefs.current[i];
+      if (offEl && offPositions[i]) {
+        const css = gridToCss(offPositions[i].col, offPositions[i].row);
+        offEl.style.left = css.left;
+        offEl.style.top = css.top;
+      }
+      const defEl = defenseRefs.current[i];
+      if (defEl && defPositions[i]) {
+        const css = gridToCss(defPositions[i].col, defPositions[i].row);
+        defEl.style.left = css.left;
+        defEl.style.top = css.top;
+      }
+    }
+  }, []);
+
+  // ── Position players for current phase (static) ───────────
+  useEffect(() => {
+    if (phase === 'idle' || phase === 'post_play') {
+      positionPlayers(offenseGridIdle, defenseGridIdle);
+    } else if (phase === 'pre_snap') {
+      positionPlayers(offenseGridForm, defenseGridForm);
+    }
+  }, [phase, offenseGridIdle, defenseGridIdle, offenseGridForm, defenseGridForm, positionPlayers]);
+
+  // ── Detect new play → run animation ───────────────────────
   useEffect(() => {
     if (playKey === prevKeyRef.current || !lastPlay) return;
     prevKeyRef.current = playKey;
@@ -147,36 +263,21 @@ export function LedGrid({
     let startCol = posToCol(Math.max(0, Math.min(100, prevBallPos)), possession);
     let endCol = losCol;
 
-    // TD: end at the correct end zone
     if (lastPlay.isTouchdown && lastPlay.scoring) {
       endCol = lastPlay.scoring.team === 'home' ? 10 : 109;
     }
+    if (lastPlay.turnover) endCol = losCol;
+    if (lastPlay.type === 'sack') endCol = losCol;
+    if (lastPlay.type === 'pass_incomplete') endCol = startCol;
 
-    // Turnovers: animate to LOS, then flash
-    if (lastPlay.turnover) {
-      endCol = losCol;
-    }
-
-    // Sack: move backward
-    if (lastPlay.type === 'sack') {
-      endCol = losCol;
-    }
-
-    // Incomplete: stay at LOS (no forward progress)
-    if (lastPlay.type === 'pass_incomplete') {
-      endCol = startCol;
-    }
-
-    // Kick plays (FG, XP, punt, kickoff): special handling
     const isKickPlay = lastPlay.type === 'field_goal' || lastPlay.type === 'extra_point';
     const isPunt = lastPlay.type === 'punt';
     const isKickoffPlay = lastPlay.type === 'kickoff';
 
-    // Clamp columns
     startCol = clamp(startCol, 0, 119);
     endCol = clamp(endCol, 0, 119);
 
-    // Determine timing
+    // Timing
     const isKO = isKickoffPlay;
     const preMs = isKO ? KICKOFF_PRE_SNAP_MS : PRE_SNAP_MS;
     const snapMs = isKO ? KICKOFF_SNAP_MS : SNAP_MS;
@@ -190,19 +291,17 @@ export function LedGrid({
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
 
-    // Start animation
     onAnimatingRef.current(true);
-    setAnimStartCol(startCol);
-    setAnimEndCol(endCol);
-    setAnimCol(null);
+    setTrailCells([]);
     setOutcomeEffect(null);
-    setKickSweepCol(null);
+    ballCarrierIdxRef.current = 5; // QB
+
+    // ── PRE_SNAP ──
     updatePhase('pre_snap');
 
     // ── SNAP ──
     const t1 = setTimeout(() => {
       updatePhase('snap');
-      setAnimCol(startCol); // brief flash on LOS
     }, preMs);
 
     // ── DEVELOPMENT ──
@@ -213,36 +312,41 @@ export function LedGrid({
       const isRun = lastPlay.type === 'run' || lastPlay.type === 'scramble' || lastPlay.type === 'two_point';
       const isSack = lastPlay.type === 'sack';
 
-      // Determine sweep direction and approach
       const dir = endCol >= startCol ? 1 : -1;
       const totalCols = Math.abs(endCol - startCol);
+      const centerRow = Math.floor(GRID_ROWS / 2);
 
       if (isKickPlay || isPunt || isKickoffPlay) {
-        // Kicks: rapid gold sweep to landing, then (for kickoff) return sweep
-        runKickSweep(startCol, endCol, devMs, isKickoffPlay, lastPlay);
+        // Kick sweep
+        runKickTrail(startCol, endCol, devMs, isKickoffPlay, lastPlay, centerRow);
       } else if (isPass && lastPlay.type === 'pass_complete') {
-        // Pass complete: hold 40%, then fast sweep remaining 60%
+        // Pass: QB drops back, then ball flies to receiver
         const holdMs = devMs * 0.4;
         const sweepMs = devMs * 0.6;
+        // Drop QB back during hold
+        animateQBDrop(startCol, devMs * 0.35);
         const holdTimer = setTimeout(() => {
-          runColumnSweep(startCol, endCol, sweepMs);
+          runBallTrail(startCol, endCol, sweepMs, centerRow, possTeam.primaryColor);
         }, holdMs);
         timersRef.current.push(holdTimer);
       } else if (isPass && lastPlay.type === 'pass_incomplete') {
-        // Incomplete: hold 40%, short sweep toward target, then snap back
         const holdMs = devMs * 0.4;
         const targetCol = startCol + dir * Math.min(15, totalCols + 10);
         const sweepMs = devMs * 0.35;
+        animateQBDrop(startCol, devMs * 0.35);
         const holdTimer = setTimeout(() => {
-          runColumnSweep(startCol, clamp(targetCol, 0, 119), sweepMs);
+          runBallTrail(startCol, clamp(targetCol, 0, 119), sweepMs, centerRow, possTeam.primaryColor);
         }, holdMs);
         timersRef.current.push(holdTimer);
       } else if (isSack) {
-        // Sack: backward sweep from LOS
-        runColumnSweep(startCol, endCol, devMs);
+        runBallTrail(startCol, endCol, devMs, centerRow, oppTeam.primaryColor);
+      } else if (isRun) {
+        // Run: move ball carrier forward
+        runBallTrail(startCol, endCol, devMs, centerRow, possTeam.primaryColor);
+        // Push OL forward slightly
+        animateOLPush(devMs * 0.5);
       } else {
-        // Runs and everything else: even sweep
-        runColumnSweep(startCol, endCol, devMs);
+        runBallTrail(startCol, endCol, devMs, centerRow, possTeam.primaryColor);
       }
     }, preMs + snapMs);
 
@@ -250,23 +354,13 @@ export function LedGrid({
     const t3 = setTimeout(() => {
       updatePhase('result');
       cancelAnimationFrame(animFrameRef.current);
-      setAnimCol(endCol);
-      setKickSweepCol(null);
 
-      // Determine outcome effect
-      if (lastPlay.isTouchdown) {
-        setOutcomeEffect('td');
-      } else if (lastPlay.turnover) {
-        setOutcomeEffect('turnover');
-      } else if (lastPlay.type === 'pass_incomplete') {
-        setOutcomeEffect('incomplete');
-      } else if (lastPlay.type === 'sack') {
-        setOutcomeEffect('sack');
-      } else if (isKickPlay && lastPlay.scoring) {
-        setOutcomeEffect('fg_good');
-      } else if (isKickPlay && !lastPlay.scoring) {
-        setOutcomeEffect('fg_miss');
-      }
+      if (lastPlay.isTouchdown) setOutcomeEffect('td');
+      else if (lastPlay.turnover) setOutcomeEffect('turnover');
+      else if (lastPlay.type === 'pass_incomplete') setOutcomeEffect('incomplete');
+      else if (lastPlay.type === 'sack') setOutcomeEffect('sack');
+      else if (isKickPlay && lastPlay.scoring) setOutcomeEffect('fg_good');
+      else if (isKickPlay && !lastPlay.scoring) setOutcomeEffect('fg_miss');
     }, preMs + snapMs + devMs);
 
     // ── POST_PLAY ──
@@ -284,7 +378,6 @@ export function LedGrid({
         });
       }
 
-      // Reset on turnover/kick
       if (lastPlay.turnover || isKickoffPlay || isPunt) {
         setDriveTrailCols(new Set());
       }
@@ -293,11 +386,8 @@ export function LedGrid({
     // ── IDLE ──
     const t5 = setTimeout(() => {
       updatePhase('idle');
-      setAnimCol(null);
-      setAnimStartCol(null);
-      setAnimEndCol(null);
+      setTrailCells([]);
       setOutcomeEffect(null);
-      setKickSweepCol(null);
       onAnimatingRef.current(false);
     }, totalMs);
 
@@ -308,24 +398,33 @@ export function LedGrid({
       cancelAnimationFrame(animFrameRef.current);
       onAnimatingRef.current(false);
     };
-  }, [playKey, lastPlay, ballPosition, losCol, possession, isPatAttempt, updatePhase]);
+  }, [playKey, lastPlay, ballPosition, losCol, possession, isPatAttempt, updatePhase,
+      possTeam.primaryColor, oppTeam.primaryColor, losFieldPct, offDir]);
 
-  // ── RAF sweep: light columns one at a time ────────────────
-  function runColumnSweep(from: number, to: number, durationMs: number) {
+  // ── RAF: Ball trail animation ─────────────────────────────
+  function runBallTrail(from: number, to: number, durationMs: number, centerRow: number, _color: string) {
     const totalCols = Math.abs(to - from);
-    if (totalCols === 0) {
-      setAnimCol(to);
-      return;
-    }
+    if (totalCols === 0) return;
     const dir = to > from ? 1 : -1;
     const startTime = performance.now();
+    const trail: { col: number; row: number }[] = [];
 
     function tick(now: number) {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / durationMs, 1);
-      const eased = 1 - Math.pow(1 - t, 2); // easeOutQuad
+      const eased = 1 - Math.pow(1 - t, 2);
       const col = from + Math.round(eased * totalCols) * dir;
-      setAnimCol(clamp(col, Math.min(from, to), Math.max(from, to)));
+      const clamped = clamp(col, Math.min(from, to), Math.max(from, to));
+
+      // Add to trail if new column
+      if (trail.length === 0 || trail[trail.length - 1].col !== clamped) {
+        // Slight vertical wobble for visual interest
+        const wobble = Math.round(Math.sin(clamped * 0.5) * 2);
+        trail.push({ col: clamped, row: clamp(centerRow + wobble, 2, GRID_ROWS - 3) });
+        if (trail.length > MAX_TRAIL_CELLS) trail.shift();
+        setTrailCells([...trail]);
+      }
+
       if (t < 1) {
         animFrameRef.current = requestAnimationFrame(tick);
       }
@@ -333,47 +432,50 @@ export function LedGrid({
     animFrameRef.current = requestAnimationFrame(tick);
   }
 
-  // ── Kick sweep: gold cells across kick distance, then return
-  function runKickSweep(from: number, to: number, durationMs: number, isKickoff: boolean, play: PlayResult) {
-    // For kickoffs: sweep gold to landing point (45% of time), then sweep team color back
-    // For punts/FG: just sweep gold across
-    const kickPhaseEnd = isKickoff ? 0.45 : 1.0;
+  // ── Kick trail (gold sweep, optional return) ──────────────
+  function runKickTrail(from: number, to: number, durationMs: number, isKO: boolean, play: PlayResult, centerRow: number) {
+    const kickPhaseEnd = isKO ? 0.45 : 1.0;
     const totalCols = Math.abs(to - from);
-    if (totalCols === 0) { setAnimCol(to); return; }
-
+    if (totalCols === 0) return;
     const dir = to > from ? 1 : -1;
-    const startTime = performance.now();
 
-    // For kickoff, compute a landing col (same as original logic)
     let landingCol: number;
-    if (isKickoff && play.kickoffMeta?.distance) {
+    if (isKO && play.kickoffMeta?.distance) {
       landingCol = from + dir * Math.min(play.kickoffMeta.distance, totalCols);
     } else {
       landingCol = from + Math.round(totalCols * 0.7) * dir;
     }
     landingCol = clamp(landingCol, 0, 119);
 
+    const startTime = performance.now();
+    const trail: { col: number; row: number }[] = [];
+
     function tick(now: number) {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / durationMs, 1);
 
+      let col: number;
       if (t <= kickPhaseEnd) {
-        // Phase 1: Gold kick sweep
         const kickT = t / kickPhaseEnd;
         const eased = kickT < 0.5 ? 2 * kickT * kickT : 1 - Math.pow(-2 * kickT + 2, 2) / 2;
         const kickCols = Math.abs(landingCol - from);
-        const col = from + Math.round(eased * kickCols) * dir;
-        setKickSweepCol(clamp(col, Math.min(from, landingCol), Math.max(from, landingCol)));
-        setAnimCol(null);
-      } else if (isKickoff) {
-        // Phase 2: Return sweep in team color
+        col = from + Math.round(eased * kickCols) * dir;
+        col = clamp(col, Math.min(from, landingCol), Math.max(from, landingCol));
+      } else if (isKO) {
         const returnT = (t - kickPhaseEnd) / (1 - kickPhaseEnd);
         const eased = 1 - Math.pow(1 - returnT, 2);
         const returnCols = Math.abs(to - landingCol);
         const returnDir = to > landingCol ? 1 : -1;
-        const col = landingCol + Math.round(eased * returnCols) * returnDir;
-        setKickSweepCol(null);
-        setAnimCol(clamp(col, Math.min(landingCol, to), Math.max(landingCol, to)));
+        col = landingCol + Math.round(eased * returnCols) * returnDir;
+        col = clamp(col, Math.min(landingCol, to), Math.max(landingCol, to));
+      } else {
+        col = to;
+      }
+
+      if (trail.length === 0 || trail[trail.length - 1].col !== col) {
+        trail.push({ col, row: centerRow });
+        if (trail.length > MAX_TRAIL_CELLS) trail.shift();
+        setTrailCells([...trail]);
       }
 
       if (t < 1) {
@@ -383,167 +485,69 @@ export function LedGrid({
     animFrameRef.current = requestAnimationFrame(tick);
   }
 
-  // ── Build cell color/opacity arrays ─────────────────────────
-  const { cellColors, cellOpacities, cellGlows } = useMemo(() => {
-    const colors = new Array<string>(TOTAL_CELLS).fill(OFF_COLOR);
-    const opacities = new Array<number>(TOTAL_CELLS).fill(1.0);
-    const glows = new Array<boolean>(TOTAL_CELLS).fill(false);
+  // ── QB drop back animation ────────────────────────────────
+  function animateQBDrop(startCol: number, durationMs: number) {
+    const qbIdx = offenseFormation.findIndex(p => p.role === 'QB');
+    if (qbIdx === -1) return;
+    const qbEl = offenseRefs.current[qbIdx];
+    if (!qbEl) return;
 
-    // Helper: set all rows for a column
-    function setColumn(col: number, color: string, opacity: number, glow: boolean = false) {
-      if (col < 0 || col >= COLS) return;
-      for (let row = 0; row < ROWS; row++) {
-        const idx = row * COLS + col;
-        colors[idx] = color;
-        opacities[idx] = opacity;
-        glows[idx] = glow;
-      }
-    }
+    const dropCols = 3; // 3 yards back
+    const dropDir = offDir; // behind LOS
+    const startTime = performance.now();
 
-    // Helper: set range of columns
-    function setColumnRange(fromCol: number, toCol: number, color: string, opacity: number) {
-      const lo = Math.max(0, Math.min(fromCol, toCol));
-      const hi = Math.min(COLS - 1, Math.max(fromCol, toCol));
-      for (let c = lo; c <= hi; c++) {
-        setColumn(c, color, opacity);
-      }
-    }
+    const fromPos = offenseGridForm[qbIdx];
+    if (!fromPos) return;
 
-    // 1. End zones (always dimly lit)
-    for (let c = 0; c < 10; c++) {
-      setColumn(c, awayTeam.primaryColor, 0.2);
-    }
-    for (let c = 110; c < 120; c++) {
-      setColumn(c, homeTeam.primaryColor, 0.2);
-    }
+    const capturedEl = qbEl;
+    const capturedFrom = fromPos;
 
-    // 2. Drive trail (dim team color)
-    if (gameStatus === 'live' && !isKickoff && !isPatAttempt) {
-      driveTrailCols.forEach(col => {
-        if (col >= 10 && col < 110) {
-          setColumn(col, possTeam.primaryColor, 0.12);
-        }
+    function tick(now: number) {
+      const t = Math.min((now - startTime) / durationMs, 1);
+      const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const col = capturedFrom.col + Math.round(eased * dropCols) * dropDir;
+      const css = gridToCss(clamp(col, 0, GRID_COLS - 1), capturedFrom.row);
+      capturedEl.style.left = css.left;
+      capturedEl.style.top = css.top;
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // ── OL push forward animation ─────────────────────────────
+  function animateOLPush(durationMs: number) {
+    const olIndices = offenseFormation.reduce<number[]>((acc, p, i) => {
+      if (LINEMEN_ROLES.has(p.role)) acc.push(i);
+      return acc;
+    }, []);
+
+    if (olIndices.length === 0) return;
+    const startTime = performance.now();
+    const pushCols = 2;
+    const pushDir = -offDir; // push toward defense
+
+    const fromPositions = olIndices.map(i => offenseGridForm[i]);
+
+    function tick(now: number) {
+      const t = Math.min((now - startTime) / durationMs, 1);
+      const eased = 1 - Math.pow(1 - t, 2);
+
+      olIndices.forEach((idx, j) => {
+        const el = offenseRefs.current[idx];
+        const from = fromPositions[j];
+        if (!el || !from) return;
+        const col = from.col + Math.round(eased * pushCols) * pushDir;
+        const css = gridToCss(clamp(col, 0, GRID_COLS - 1), from.row);
+        el.style.left = css.left;
+        el.style.top = css.top;
       });
+
+      if (t < 1) requestAnimationFrame(tick);
     }
+    requestAnimationFrame(tick);
+  }
 
-    // 3. LOS marker (when idle or pre-snap)
-    if (phase === 'idle' || phase === 'pre_snap' || phase === 'post_play') {
-      if (losCol >= 10 && losCol < 110) {
-        setColumn(losCol, LOS_COLOR, 0.85, true);
-      }
-    }
-
-    // 4. First down marker (when idle or pre-snap, and relevant)
-    if ((phase === 'idle' || phase === 'pre_snap' || phase === 'post_play') && !isKickoff && !isPatAttempt) {
-      if (fdCol >= 10 && fdCol < 110 && fdCol !== losCol) {
-        setColumn(fdCol, FIRST_DOWN_COLOR, 0.7, true);
-      }
-    }
-
-    // 5. Snap flash
-    if (phase === 'snap' && animCol !== null) {
-      setColumn(animCol, '#ffffff', 0.9, true);
-    }
-
-    // 6. Development phase animation
-    if (phase === 'development' && animStartCol !== null) {
-      // Kick sweep (gold)
-      if (kickSweepCol !== null) {
-        const lo = Math.min(animStartCol, kickSweepCol);
-        const hi = Math.max(animStartCol, kickSweepCol);
-        setColumnRange(lo, hi, KICK_COLOR, 0.4);
-        setColumn(kickSweepCol, KICK_COLOR, 1.0, true);
-      }
-
-      // Normal column sweep (team color)
-      if (animCol !== null && kickSweepCol === null) {
-        const lo = Math.min(animStartCol, animCol);
-        const hi = Math.max(animStartCol, animCol);
-
-        // Sack: use opponent color
-        const isSack = lastPlay?.type === 'sack';
-        const sweepColor = isSack ? oppTeam.primaryColor : possTeam.primaryColor;
-
-        // Trail cells
-        for (let c = lo; c <= hi; c++) {
-          if (c >= 0 && c < COLS) {
-            setColumn(c, sweepColor, c === animCol ? 1.0 : 0.5);
-          }
-        }
-        // Head cell glow
-        if (animCol >= 0 && animCol < COLS) {
-          glows[animCol] = true;
-          for (let row = 0; row < ROWS; row++) {
-            glows[row * COLS + animCol] = true;
-          }
-        }
-      }
-    }
-
-    // 7. Result phase effects
-    if (phase === 'result' && animStartCol !== null && animEndCol !== null) {
-      const lo = Math.min(animStartCol, animEndCol);
-      const hi = Math.max(animStartCol, animEndCol);
-
-      if (outcomeEffect === 'td') {
-        // Light up sweep in team color + end zone pulse
-        setColumnRange(lo, hi, possTeam.primaryColor, 0.8);
-        const scoringTeam = lastPlay?.scoring?.team === 'home' ? homeTeam : awayTeam;
-        if (animEndCol <= 10) {
-          for (let c = 0; c < 10; c++) setColumn(c, scoringTeam.primaryColor, 1.0, true);
-        } else if (animEndCol >= 109) {
-          for (let c = 110; c < 120; c++) setColumn(c, scoringTeam.primaryColor, 1.0, true);
-        }
-      } else if (outcomeEffect === 'turnover') {
-        setColumnRange(lo, hi, TURNOVER_COLOR, 0.7);
-        if (animEndCol >= 0 && animEndCol < COLS) {
-          setColumn(animEndCol, TURNOVER_COLOR, 1.0, true);
-        }
-      } else if (outcomeEffect === 'incomplete') {
-        // Flash red at start col
-        setColumn(animStartCol, INCOMPLETE_COLOR, 0.8, true);
-      } else if (outcomeEffect === 'sack') {
-        setColumnRange(lo, hi, oppTeam.primaryColor, 0.6);
-        setColumn(animEndCol, oppTeam.primaryColor, 1.0, true);
-      } else if (outcomeEffect === 'fg_good' || outcomeEffect === 'fg_miss') {
-        const color = outcomeEffect === 'fg_good' ? '#22c55e' : INCOMPLETE_COLOR;
-        setColumnRange(lo, hi, KICK_COLOR, 0.4);
-        setColumn(animEndCol, color, 1.0, true);
-      } else {
-        // Normal gain
-        setColumnRange(lo, hi, possTeam.primaryColor, 0.7);
-        setColumn(animEndCol, possTeam.primaryColor, 1.0, true);
-      }
-    }
-
-    return { cellColors: colors, cellOpacities: opacities, cellGlows: glows };
-  }, [
-    phase, losCol, fdCol, animCol, animStartCol, animEndCol, kickSweepCol,
-    outcomeEffect, homeTeam, awayTeam, possTeam, oppTeam, driveTrailCols,
-    isKickoff, isPatAttempt, gameStatus, lastPlay,
-  ]);
-
-  // ── Yard line positions (every 10 yards) ────────────────────
-  const yardLines = useMemo(() => {
-    // Columns at 10-yard marks: col 20=10yd, 30=20yd, ... 60=50yd, 70=40yd, ... 110=end
-    return [20, 30, 40, 50, 60, 70, 80, 90, 100];
-  }, []);
-
-  const yardNumbers = useMemo(() => {
-    return [
-      { col: 20, label: '10' },
-      { col: 30, label: '20' },
-      { col: 40, label: '30' },
-      { col: 50, label: '40' },
-      { col: 60, label: '50' },
-      { col: 70, label: '40' },
-      { col: 80, label: '30' },
-      { col: 90, label: '20' },
-      { col: 100, label: '10' },
-    ];
-  }, []);
-
-  // ── Down & distance text ────────────────────────────────────
+  // ── Down & distance text ──────────────────────────────────
   const downText = useMemo(() => {
     if (isKickoff || isPatAttempt || gameStatus !== 'live') return null;
     const suffix = down === 1 ? 'st' : down === 2 ? 'nd' : down === 3 ? 'rd' : 'th';
@@ -551,21 +555,260 @@ export function LedGrid({
     return `${down}${suffix} & ${yds}`;
   }, [down, yardsToGo, isKickoff, isPatAttempt, gameStatus]);
 
-  // ── Down badge position (above grid, at LOS column) ────────
-  const losPct = ((losCol) / COLS) * 100;
+  // LOS position as CSS %
+  const losCssPct = ((losCol) / GRID_COLS) * 100;
+  const fdCssPct = ((fdCol) / GRID_COLS) * 100;
 
-  // ── TD pulse animation class ────────────────────────────────
+  // ── TD / Turnover classes ─────────────────────────────────
   const isTdPulse = phase === 'result' && outcomeEffect === 'td';
   const isTurnoverFlash = phase === 'result' && outcomeEffect === 'turnover';
 
+  // Cell dimensions as % for sizing
+  const cw = cellWidthPct();
+  const ch = cellHeightPct();
+
+  // ── Determine which player is the ball carrier ────────────
+  const ballCarrierIdx = useMemo(() => {
+    if (!lastPlay) return -1;
+    if (lastPlay.type === 'run' || lastPlay.type === 'scramble') {
+      return offenseFormation.findIndex(p => p.role === 'RB') ?? -1;
+    }
+    if (lastPlay.type === 'pass_complete') {
+      // After catch, receivers are WR roles
+      const wrIdx = offenseFormation.findIndex(p => p.role === 'WR');
+      return wrIdx >= 0 ? wrIdx : -1;
+    }
+    // Default: QB
+    return offenseFormation.findIndex(p => p.role === 'QB');
+  }, [lastPlay, offenseFormation]);
+
   return (
-    <div className="relative w-full h-full flex flex-col justify-center select-none">
+    <div
+      className={`absolute inset-0 pointer-events-none z-10 ${isTdPulse ? 'led-td-pulse' : ''} ${isTurnoverFlash ? 'led-turnover-flash' : ''}`}
+    >
+      {/* Faint grid lines via CSS */}
+      <div className="led-grid-lines absolute inset-0" />
+
+      {/* LOS stripe (full-height blue) */}
+      {(phase === 'idle' || phase === 'pre_snap' || phase === 'post_play') && losCol >= 10 && losCol < 110 && (
+        <div
+          className="absolute top-0 bottom-0"
+          style={{
+            left: `${losCssPct}%`,
+            width: `${cw}%`,
+            background: 'rgba(96, 165, 250, 0.25)',
+            transform: 'translateX(-50%)',
+          }}
+        />
+      )}
+
+      {/* First-down stripe (full-height gold) */}
+      {(phase === 'idle' || phase === 'pre_snap' || phase === 'post_play') &&
+        !isKickoff && !isPatAttempt && fdCol >= 10 && fdCol < 110 && fdCol !== losCol && (
+        <div
+          className="absolute top-0 bottom-0"
+          style={{
+            left: `${fdCssPct}%`,
+            width: `${cw}%`,
+            background: 'rgba(252, 211, 77, 0.2)',
+            transform: 'translateX(-50%)',
+          }}
+        />
+      )}
+
+      {/* End zone tints */}
+      <div
+        className="absolute top-0 bottom-0 left-0"
+        style={{
+          width: `${(10 / GRID_COLS) * 100}%`,
+          background: `${awayTeam.primaryColor}18`,
+        }}
+      />
+      <div
+        className="absolute top-0 bottom-0 right-0"
+        style={{
+          width: `${(10 / GRID_COLS) * 100}%`,
+          background: `${homeTeam.primaryColor}18`,
+        }}
+      />
+
+      {/* TD end zone pulse */}
+      {outcomeEffect === 'td' && lastPlay?.scoring && (
+        <div
+          className="absolute top-0 bottom-0"
+          style={{
+            ...(lastPlay.scoring.team === 'away'
+              ? { left: 0, width: `${(10 / GRID_COLS) * 100}%` }
+              : { right: 0, width: `${(10 / GRID_COLS) * 100}%` }),
+            background: `${lastPlay.scoring.team === 'away' ? awayTeam.primaryColor : homeTeam.primaryColor}60`,
+            animation: 'led-td-pulse 0.6s ease-in-out 2',
+          }}
+        />
+      )}
+
+      {/* Drive trail (dim full-height columns in team color) */}
+      {gameStatus === 'live' && !isKickoff && !isPatAttempt && driveTrailCols.size > 0 && (
+        (() => {
+          // Render as contiguous blocks for performance
+          const cols = Array.from(driveTrailCols).filter(c => c >= 10 && c < 110).sort((a, b) => a - b);
+          if (cols.length === 0) return null;
+          const blocks: { start: number; end: number }[] = [];
+          let cur = { start: cols[0], end: cols[0] };
+          for (let i = 1; i < cols.length; i++) {
+            if (cols[i] === cur.end + 1) {
+              cur.end = cols[i];
+            } else {
+              blocks.push(cur);
+              cur = { start: cols[i], end: cols[i] };
+            }
+          }
+          blocks.push(cur);
+          return blocks.map((b, idx) => (
+            <div
+              key={`dt-${idx}`}
+              className="absolute top-0 bottom-0"
+              style={{
+                left: `${(b.start / GRID_COLS) * 100}%`,
+                width: `${((b.end - b.start + 1) / GRID_COLS) * 100}%`,
+                background: `${possTeam.primaryColor}14`,
+              }}
+            />
+          ));
+        })()
+      )}
+
+      {/* Ball trail cells during development/result */}
+      {trailCells.length > 0 && (phase === 'development' || phase === 'result') && (
+        trailCells.map((cell, i) => {
+          const isHead = i === trailCells.length - 1;
+          const isSack = lastPlay?.type === 'sack';
+          const isKick = lastPlay?.type === 'field_goal' || lastPlay?.type === 'extra_point' ||
+                         lastPlay?.type === 'punt' || lastPlay?.type === 'kickoff';
+          const color = isSack
+            ? oppTeam.primaryColor
+            : isKick ? '#fbbf24' : possTeam.primaryColor;
+          const opacity = isHead ? 0.9 : 0.2 + (i / trailCells.length) * 0.4;
+          const css = gridToCss(cell.col, cell.row);
+          return (
+            <div
+              key={`trail-${i}`}
+              className="led-cell led-cell--trail"
+              style={{
+                left: css.left,
+                top: css.top,
+                width: `${cw * 1.2}%`,
+                height: `${ch * 1.2}%`,
+                background: color,
+                opacity,
+                boxShadow: isHead ? `0 0 8px ${color}, 0 0 4px ${color}` : 'none',
+              }}
+            />
+          );
+        })
+      )}
+
+      {/* 22 player cells — offense */}
+      {offenseFormation.map((pos, i) => {
+        const isLineman = LINEMEN_ROLES.has(pos.role);
+        const isCarrier = (phase === 'development' || phase === 'result') && i === ballCarrierIdx;
+        const initPos = (phase === 'idle' || phase === 'post_play')
+          ? (offenseGridIdle[i] ? gridToCss(offenseGridIdle[i].col, offenseGridIdle[i].row) : { left: '50%', top: '50%' })
+          : (offenseGridForm[i] ? gridToCss(offenseGridForm[i].col, offenseGridForm[i].row) : { left: '50%', top: '50%' });
+
+        return (
+          <div
+            key={`off-${i}`}
+            ref={el => { offenseRefs.current[i] = el; }}
+            className={`led-cell led-cell--player ${isLineman ? 'led-cell--player-ol' : ''} ${isCarrier ? 'led-cell--ball-carrier' : ''}`}
+            style={{
+              left: initPos.left,
+              top: initPos.top,
+              width: `${cw * (isCarrier ? 1.8 : 1.3)}%`,
+              height: `${ch * (isCarrier ? 1.8 : 1.3)}%`,
+              background: possTeam.primaryColor,
+              boxShadow: `0 0 4px ${possTeam.primaryColor}80`,
+              transition: 'left 120ms linear, top 120ms linear, width 150ms, height 150ms',
+            }}
+          />
+        );
+      })}
+
+      {/* 22 player cells — defense */}
+      {defenseFormation.map((pos, i) => {
+        const isLineman = LINEMEN_ROLES.has(pos.role);
+        const initPos = (phase === 'idle' || phase === 'post_play')
+          ? (defenseGridIdle[i] ? gridToCss(defenseGridIdle[i].col, defenseGridIdle[i].row) : { left: '50%', top: '50%' })
+          : (defenseGridForm[i] ? gridToCss(defenseGridForm[i].col, defenseGridForm[i].row) : { left: '50%', top: '50%' });
+
+        return (
+          <div
+            key={`def-${i}`}
+            ref={el => { defenseRefs.current[i] = el; }}
+            className={`led-cell led-cell--player ${isLineman ? 'led-cell--player-ol' : ''}`}
+            style={{
+              left: initPos.left,
+              top: initPos.top,
+              width: `${cw * 1.3}%`,
+              height: `${ch * 1.3}%`,
+              background: oppTeam.primaryColor,
+              boxShadow: `0 0 4px ${oppTeam.primaryColor}80`,
+              transition: 'left 120ms linear, top 120ms linear',
+            }}
+          />
+        );
+      })}
+
+      {/* Snap flash */}
+      {phase === 'snap' && (
+        <div
+          className="led-cell"
+          style={{
+            ...gridToCss(losCol, Math.floor(GRID_ROWS / 2)),
+            width: `${cw * 2}%`,
+            height: `${ch * 2}%`,
+            background: '#ffffff',
+            opacity: 0.9,
+            boxShadow: '0 0 12px #fff, 0 0 6px #fff',
+          }}
+        />
+      )}
+
+      {/* Outcome effects — incomplete red flash */}
+      {outcomeEffect === 'incomplete' && (
+        <div
+          className="led-cell"
+          style={{
+            ...gridToCss(losCol, Math.floor(GRID_ROWS / 2)),
+            width: `${cw * 3}%`,
+            height: `${ch * 3}%`,
+            background: '#ef4444',
+            opacity: 0.7,
+            boxShadow: '0 0 16px #ef4444',
+          }}
+        />
+      )}
+
+      {/* Outcome effects — sack burst */}
+      {outcomeEffect === 'sack' && (
+        <div
+          className="led-cell"
+          style={{
+            ...gridToCss(losCol, Math.floor(GRID_ROWS / 2)),
+            width: `${cw * 3}%`,
+            height: `${ch * 3}%`,
+            background: oppTeam.primaryColor,
+            opacity: 0.8,
+            boxShadow: `0 0 16px ${oppTeam.primaryColor}`,
+          }}
+        />
+      )}
+
       {/* Down & distance badge */}
       {downText && (phase === 'idle' || phase === 'pre_snap' || phase === 'post_play') && (
         <div
-          className="absolute z-20 pointer-events-none"
+          className="absolute z-20"
           style={{
-            left: `${clamp(losPct, 8, 92)}%`,
+            left: `${clamp(losCssPct, 8, 92)}%`,
             top: '4px',
             transform: 'translateX(-50%)',
           }}
@@ -585,106 +828,22 @@ export function LedGrid({
         </div>
       )}
 
-      {/* Team abbreviations */}
-      <div className="absolute left-1 top-1/2 -translate-y-1/2 z-20 pointer-events-none">
+      {/* Team abbreviations at field edges */}
+      <div className="absolute left-1 top-1/2 -translate-y-1/2 z-20">
         <span
           className="text-[10px] font-black tracking-widest"
-          style={{ color: awayTeam.primaryColor, opacity: 0.6, textShadow: `0 0 8px ${awayTeam.primaryColor}40` }}
+          style={{ color: awayTeam.primaryColor, opacity: 0.5, textShadow: `0 0 8px ${awayTeam.primaryColor}40` }}
         >
           {awayTeam.abbreviation}
         </span>
       </div>
-      <div className="absolute right-1 top-1/2 -translate-y-1/2 z-20 pointer-events-none">
+      <div className="absolute right-1 top-1/2 -translate-y-1/2 z-20">
         <span
           className="text-[10px] font-black tracking-widest"
-          style={{ color: homeTeam.primaryColor, opacity: 0.6, textShadow: `0 0 8px ${homeTeam.primaryColor}40` }}
+          style={{ color: homeTeam.primaryColor, opacity: 0.5, textShadow: `0 0 8px ${homeTeam.primaryColor}40` }}
         >
           {homeTeam.abbreviation}
         </span>
-      </div>
-
-      {/* Main LED grid */}
-      <div className="relative mx-auto w-full" style={{ maxWidth: '100%' }}>
-        {/* Grid wrapper with gap simulating LED grid lines */}
-        <div
-          className={`led-grid-board ${isTdPulse ? 'led-td-pulse' : ''} ${isTurnoverFlash ? 'led-turnover-flash' : ''}`}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-            gridTemplateRows: `repeat(${ROWS}, 1fr)`,
-            gap: '1px',
-            backgroundColor: 'rgba(255, 255, 255, 0.03)',
-            borderRadius: '4px',
-            overflow: 'hidden',
-            aspectRatio: `${COLS} / ${ROWS}`,
-          }}
-        >
-          {Array.from({ length: TOTAL_CELLS }, (_, i) => {
-            const color = cellColors[i];
-            const opacity = cellOpacities[i];
-            const glow = cellGlows[i];
-
-            return (
-              <div
-                key={i}
-                style={{
-                  backgroundColor: color,
-                  opacity,
-                  boxShadow: glow ? `0 0 6px ${color}, 0 0 2px ${color}` : 'none',
-                  transition: 'background-color 60ms linear, opacity 60ms linear',
-                }}
-              />
-            );
-          })}
-        </div>
-
-        {/* Yard line markers (absolutely positioned thin lines) */}
-        {yardLines.map(col => (
-          <div
-            key={col}
-            className="absolute top-0 bottom-0 pointer-events-none"
-            style={{
-              left: `${(col / COLS) * 100}%`,
-              width: '1px',
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
-            }}
-          />
-        ))}
-
-        {/* End zone dividers */}
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{
-            left: `${(10 / COLS) * 100}%`,
-            width: '1px',
-            backgroundColor: 'rgba(255, 255, 255, 0.15)',
-          }}
-        />
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{
-            left: `${(110 / COLS) * 100}%`,
-            width: '1px',
-            backgroundColor: 'rgba(255, 255, 255, 0.15)',
-          }}
-        />
-      </div>
-
-      {/* Yard numbers below grid */}
-      <div className="relative w-full mt-0.5" style={{ height: '14px' }}>
-        {yardNumbers.map(({ col, label }) => (
-          <span
-            key={col}
-            className="absolute text-[9px] font-mono font-bold pointer-events-none"
-            style={{
-              left: `${(col / COLS) * 100}%`,
-              transform: 'translateX(-50%)',
-              color: 'rgba(255, 255, 255, 0.25)',
-            }}
-          >
-            {label}
-          </span>
-        ))}
       </div>
     </div>
   );
