@@ -341,6 +341,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
               driveStartPosition={driveStartPosition}
               narrativeContext={currentEvent?.narrativeContext ?? null}
               commentary={delayedCommentary}
+              weather={gameState.weather ?? null}
             />
           </div>
 

@@ -1,8 +1,8 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import type { PlayResult } from '@/lib/simulation/types';
-import type { Phase } from '@/lib/animation/play-animation';
+import type { PlayResult, WeatherConditions } from '@/lib/simulation/types';
+import type { Phase } from '@/lib/animation/types';
 import { FieldGround } from './field-ground';
 import { GoalPosts } from './goal-posts';
 import { StadiumLighting } from './stadium-lighting';
@@ -12,6 +12,7 @@ import { Football3D } from './football-3d';
 import { FieldLines3D } from './field-lines-3d';
 import { DriveTrail3D } from './drive-trail-3d';
 import { BallMarker3D } from './ball-marker-3d';
+import { WeatherEffects } from './weather-effects';
 
 interface FieldSceneProps {
   ballLeft: number;
@@ -29,6 +30,7 @@ interface FieldSceneProps {
   isPlayAnimating: boolean;
   showDriveTrail: boolean;
   isKickoff: boolean;
+  weather: WeatherConditions | null;
 }
 
 /**
@@ -51,6 +53,7 @@ export function FieldScene({
   isPlayAnimating,
   showDriveTrail,
   isKickoff,
+  weather,
 }: FieldSceneProps) {
   // Convert ball position to world X for camera
   const ballWorldX = (ballLeft / 100) * 120 - 60;
@@ -58,6 +61,10 @@ export function FieldScene({
   const isWidePlay = lastPlay?.type === 'kickoff' || lastPlay?.type === 'punt';
 
   const possessingTeam = possession === 'home' ? homeTeam : awayTeam;
+
+  // Weather-driven fog distances
+  const fogNear = weather?.type === 'fog' ? 20 : 60;
+  const fogFar = weather?.type === 'fog' ? 60 : 150;
 
   return (
     <Canvas
@@ -67,17 +74,19 @@ export function FieldScene({
       camera={{ fov: 50, near: 0.1, far: 500, position: [ballWorldX - 20, 22, 0] }}
       style={{ width: '100%', height: '100%', background: '#0a1a0a' }}
     >
-      {/* Fog for depth */}
-      <fog attach="fog" args={['#0a1a0a', 60, 150]} />
+      {/* Fog for depth (adjusted by weather) */}
+      <fog attach="fog" args={['#0a1a0a', fogNear, fogFar]} />
 
-      {/* Lighting */}
-      <StadiumLighting />
+      {/* Lighting (weather-responsive) */}
+      <StadiumLighting weather={weather} />
 
-      {/* Broadcast camera (lerps each frame) */}
+      {/* Broadcast camera (preset-based with phase transitions) */}
       <BroadcastCamera
         ballX={ballWorldX}
         offenseDirection={offenseDirection}
         isWidePlay={isWidePlay}
+        phase={phase}
+        lastPlay={lastPlay}
       />
 
       {/* Field ground with procedural texture */}
@@ -101,7 +110,7 @@ export function FieldScene({
         visible={showDriveTrail}
       />
 
-      {/* 22 player capsules */}
+      {/* 22 player capsules with helmets */}
       <PlayerModels
         ballPosition={ballLeft}
         prevBallPosition={prevBallLeft}
@@ -113,7 +122,7 @@ export function FieldScene({
         phase={phase}
       />
 
-      {/* 3D Football */}
+      {/* 3D Football (choreographer-driven) */}
       <Football3D
         ballPosition={ballLeft}
         prevBallPosition={prevBallLeft}
@@ -128,6 +137,9 @@ export function FieldScene({
         ballPosition={ballLeft}
         hidden={isPlayAnimating}
       />
+
+      {/* Weather particles */}
+      <WeatherEffects weather={weather} />
     </Canvas>
   );
 }

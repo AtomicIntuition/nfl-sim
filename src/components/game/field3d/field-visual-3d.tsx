@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import type { PlayResult, NarrativeSnapshot } from '@/lib/simulation/types';
+import type { PlayResult, NarrativeSnapshot, WeatherConditions } from '@/lib/simulation/types';
 import { CoinFlip } from '../field/coin-flip';
 import { CelebrationOverlay } from '../field/celebration-overlay';
 import { PlayCallOverlay } from '../field/play-call-overlay';
@@ -10,19 +10,8 @@ import { CrowdAtmosphere } from '../field/crowd-atmosphere';
 import { FieldCommentaryOverlay } from '../field/field-commentary-overlay';
 import { KickoffIntroOverlay } from '../field/kickoff-intro-overlay';
 import { Minimap } from '../field/minimap';
-import type { Phase } from '@/lib/animation/play-animation';
-import {
-  PRE_SNAP_MS,
-  SNAP_MS,
-  DEVELOPMENT_MS,
-  RESULT_MS,
-  POST_PLAY_MS,
-  KICKOFF_PRE_SNAP_MS,
-  KICKOFF_SNAP_MS,
-  KICKOFF_RESULT_MS,
-  KICKOFF_POST_PLAY_MS,
-  getKickoffDevMs,
-} from '@/lib/animation/play-animation';
+import type { Phase } from '@/lib/animation/types';
+import { getPhaseTimings, getTotalPhaseDuration } from '@/lib/animation/choreographer';
 
 // Dynamically import Canvas scene to avoid SSR issues with Three.js
 const FieldScene = dynamic(() => import('./field-scene').then(m => ({ default: m.FieldScene })), {
@@ -51,13 +40,14 @@ interface FieldVisualProps {
   driveStartPosition: number;
   narrativeContext: NarrativeSnapshot | null;
   commentary?: { playByPlay: string; crowdReaction: string; excitement: number } | null;
+  weather?: WeatherConditions | null;
 }
 
 /**
  * 3D Field Visual — orchestrator component.
  * Renders the Three.js Canvas scene with all 3D elements,
  * plus HTML overlays positioned absolutely over the canvas.
- * Drop-in replacement for FieldVisual with identical props.
+ * Uses the choreographer-driven phase system for broadcast-quality animation.
  */
 export function FieldVisual3D({
   ballPosition,
@@ -75,8 +65,9 @@ export function FieldVisual3D({
   driveStartPosition,
   narrativeContext,
   commentary,
+  weather,
 }: FieldVisualProps) {
-  // ── Coordinate conversion (same as original FieldVisual) ────
+  // ── Coordinate conversion ──────────────────────────────────
 
   const toAbsolutePercent = (pos: number, team: 'home' | 'away'): number => {
     return team === 'home' ? 100 - pos : pos;
@@ -128,37 +119,53 @@ export function FieldVisual3D({
     }
   }, [lastPlay]);
 
-  // ── Phase state machine ────────────────────────────────────
+  // ── Phase state machine (choreographer-driven) ─────────────
 
   useEffect(() => {
     if (!lastPlay || playKey === 0) return;
 
-    if (lastPlay.type === 'kneel' || lastPlay.type === 'spike' ||
-        lastPlay.type === 'pregame' || lastPlay.type === 'coin_toss') return;
+    if (lastPlay.type === 'pregame' || lastPlay.type === 'coin_toss') return;
 
-    const isKickoffPlay = lastPlay.type === 'kickoff';
-    const preMs = isKickoffPlay ? KICKOFF_PRE_SNAP_MS : PRE_SNAP_MS;
-    const snapMs = isKickoffPlay ? KICKOFF_SNAP_MS : SNAP_MS;
-    const devMs = isKickoffPlay ? getKickoffDevMs(lastPlay) : DEVELOPMENT_MS;
-    const resMs = isKickoffPlay ? KICKOFF_RESULT_MS : RESULT_MS;
-    const postMs = isKickoffPlay ? KICKOFF_POST_PLAY_MS : POST_PLAY_MS;
-    const totalMs = preMs + snapMs + devMs + resMs + postMs;
+    const timings = getPhaseTimings(lastPlay);
+    const allPhases: { phase: Phase; duration: number }[] = [
+      { phase: 'huddle' as Phase, duration: timings.huddle },
+      { phase: 'break' as Phase, duration: timings.break },
+      { phase: 'set' as Phase, duration: timings.set },
+      { phase: 'motion' as Phase, duration: timings.motion },
+      { phase: 'snap' as Phase, duration: timings.snap },
+      { phase: 'development' as Phase, duration: timings.development },
+      { phase: 'result' as Phase, duration: timings.result },
+      { phase: 'whistle' as Phase, duration: timings.whistle },
+      { phase: 'reset' as Phase, duration: timings.reset },
+    ];
+    const phases = allPhases.filter(p => p.duration > 0);
 
     setIsPlayAnimating(true);
-    setPlayPhase('pre_snap');
 
-    const t1 = setTimeout(() => setPlayPhase('snap'), preMs);
-    const t2 = setTimeout(() => setPlayPhase('development'), preMs + snapMs);
-    const t3 = setTimeout(() => setPlayPhase('result'), preMs + snapMs + devMs);
-    const t4 = setTimeout(() => setPlayPhase('post_play'), preMs + snapMs + devMs + resMs);
-    const t5 = setTimeout(() => {
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    let elapsed = 0;
+
+    // Set first phase immediately
+    if (phases.length > 0) {
+      setPlayPhase(phases[0].phase);
+    }
+
+    // Schedule phase transitions
+    for (let i = 1; i < phases.length; i++) {
+      elapsed += phases[i - 1].duration;
+      const phase = phases[i].phase;
+      timeouts.push(setTimeout(() => setPlayPhase(phase), elapsed));
+    }
+
+    // Final: return to idle
+    elapsed += phases[phases.length - 1].duration;
+    timeouts.push(setTimeout(() => {
       setPlayPhase('idle');
       setIsPlayAnimating(false);
-    }, totalMs);
+    }, elapsed));
 
     return () => {
-      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
-      clearTimeout(t4); clearTimeout(t5);
+      timeouts.forEach(clearTimeout);
       setIsPlayAnimating(false);
     };
   }, [playKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -232,6 +239,7 @@ export function FieldVisual3D({
           isPlayAnimating={isPlayAnimating}
           showDriveTrail={showDriveTrail}
           isKickoff={isKickoff}
+          weather={weather ?? null}
         />
 
         {/* HTML Overlays (positioned over canvas) */}
@@ -239,7 +247,7 @@ export function FieldVisual3D({
           formation={lastPlay?.formation ?? null}
           defensiveCall={lastPlay?.defensiveCall ?? null}
           playCall={lastPlay?.call ?? null}
-          visible={playPhase === 'pre_snap'}
+          visible={playPhase === 'set' || playPhase === 'motion'}
         />
 
         <CrowdAtmosphere
