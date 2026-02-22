@@ -14,7 +14,7 @@ import {
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { generateSeasonSchedule } from '@/lib/scheduling/schedule-generator';
 import { calculatePlayoffSeeds } from '@/lib/scheduling/playoff-manager';
-import { simulateGameWithCommentary } from '@/lib/simulation/engine';
+import { simulateGame } from '@/lib/simulation/engine';
 import { ESTIMATED_GAME_SLOT_MS } from '@/lib/simulation/constants';
 import { INTERMISSION_MS, WEEK_BREAK_MS, OFFSEASON_MS } from '@/lib/scheduling/constants';
 import { scorePredictions } from '@/lib/db/queries/predictions';
@@ -558,14 +558,13 @@ async function handleStartGame(seasonId: string, gameId: string) {
   const simHomePlayers = homePlayerRows.map(mapDbPlayerToSim);
   const simAwayPlayers = awayPlayerRows.map(mapDbPlayerToSim);
 
-  // Run the full simulation engine with AI commentary
-  const simResult = await simulateGameWithCommentary({
+  // Run the full simulation engine
+  const simResult = simulateGame({
     homeTeam: simHomeTeam,
     awayTeam: simAwayTeam,
     homePlayers: simHomePlayers,
     awayPlayers: simAwayPlayers,
     gameType: game.gameType as GameType,
-    generateCommentary: true,
   });
 
   // Map engine events to DB event rows

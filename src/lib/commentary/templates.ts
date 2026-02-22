@@ -38,40 +38,40 @@ interface TemplateCategory {
 
 const RUN_TEMPLATES: TemplateCategory = {
   low: [
-    { playByPlay: '{rusher} carries for {yards} yards.', colorAnalysis: "That's a solid run game they've got going.", crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} up the middle for {yards}.', colorAnalysis: 'Nothing flashy, but that moves the chains.', crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} takes the handoff, gains {yards}.', colorAnalysis: "He's picking up what the offensive line gives him.", crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} off right tackle for {yards} yards.', colorAnalysis: 'The offensive line got a good push on that play.', crowdReaction: 'murmur' },
-    { playByPlay: 'Handoff to {rusher}, {yards} yards on the carry.', colorAnalysis: "Just keep grinding it out. That's football.", crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} hits the hole for {yards}.', colorAnalysis: 'Efficient running. Keeps the defense honest.', crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} plunges ahead for {yards} yards.', colorAnalysis: "He got what was blocked. That's all you can ask.", crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} gets {yards} on the ground.', colorAnalysis: 'The run game is establishing itself today.', crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} between the tackles for {yards}.', colorAnalysis: 'Good patience by the runner to let the blocks develop.', crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} follows the fullback for {yards} yards.', colorAnalysis: 'Old school football right there. I love it.', crowdReaction: 'murmur' },
+    { playByPlay: '{down} and {distance}. {rusher} carries for {yards} yards.', colorAnalysis: "{teamName} keeping it on the ground. That's solid.", crowdReaction: 'murmur' },
+    { playByPlay: '{rusher} up the middle for {yards}. {downResult}', colorAnalysis: '{teamName} grinding it out with the run game.', crowdReaction: 'murmur' },
+    { playByPlay: '{rusher} takes the handoff, gains {yards}.', colorAnalysis: "He's picking up what the {teamName} offensive line gives him.", crowdReaction: 'murmur' },
+    { playByPlay: '{down} and {distance}. {rusher} off right tackle for {yards} yards.', colorAnalysis: 'Good push up front by the {teamName} o-line.', crowdReaction: 'murmur' },
+    { playByPlay: 'Handoff to {rusher}, {yards} yards on the carry. {downResult}', colorAnalysis: "{teamName} just keeps grinding. That's football.", crowdReaction: 'murmur' },
+    { playByPlay: '{rusher} hits the hole for {yards}.', colorAnalysis: '{defTeamName} defense needs to shore up the run gaps.', crowdReaction: 'murmur' },
+    { playByPlay: '{rusher} plunges ahead for {yards} yards. {downResult}', colorAnalysis: "He got what was blocked. That's all you can ask.", crowdReaction: 'murmur' },
+    { playByPlay: '{down} and {distance}. {rusher} gets {yards} on the ground.', colorAnalysis: '{teamName} establishing the run early. Smart game plan.', crowdReaction: 'murmur' },
+    { playByPlay: '{rusher} between the tackles for {yards}. {downResult}', colorAnalysis: 'Good patience by {rusher} to let the blocks develop.', crowdReaction: 'murmur' },
+    { playByPlay: '{rusher} follows the lead blocker for {yards} yards.', colorAnalysis: 'Old school {teamName} football right there. I love it.', crowdReaction: 'murmur' },
   ],
   medium: [
-    { playByPlay: '{rusher} breaks through the line for {yards}!', colorAnalysis: "He's running with authority today.", crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} finds a crease and picks up {yards} yards!', colorAnalysis: 'Great vision to find that hole.', crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} shakes a tackler and gets {yards}!', colorAnalysis: "That's a guy who refuses to go down easy.", crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} bounces it outside for {yards} yards!', colorAnalysis: "He saw the cutback lane and didn't hesitate.", crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} powers through contact for {yards}!', colorAnalysis: 'That second effort got him an extra three or four yards.', crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} with a nice gain of {yards} on the carry!', colorAnalysis: "He's really starting to find his rhythm now.", crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} makes a man miss and picks up {yards}!', colorAnalysis: 'You can see the defensive coordinator shaking his head.', crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} churns his legs for {yards} yards!', colorAnalysis: 'Pure effort. He wanted that first down.', crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} hits the edge and turns the corner for {yards}!', colorAnalysis: 'That speed around the corner is hard to stop.', crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} with a strong run, {yards} yards!', colorAnalysis: "The defense doesn't want to tackle this man one-on-one.", crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} out of {personnel} finds a lane for {yards}!', colorAnalysis: 'That heavy personnel grouping is opening holes all day.', crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} runs through the {stunt} stunt for {yards} yards!', colorAnalysis: 'The defense tried to get cute and got burned for it.', crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} breaks through the {defTeamName} line for {yards}!', colorAnalysis: "He's running with authority today.", crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} finds a crease and picks up {yards} yards! {downResult}', colorAnalysis: 'Great vision to find that hole against the {defTeamName} front.', crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} shakes a {defTeamName} tackler and gets {yards}!', colorAnalysis: "That's a guy who refuses to go down easy.", crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} bounces it outside for {yards} yards!', colorAnalysis: "He saw the cutback lane and didn't hesitate. {teamName} moving the ball.", crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} powers through contact for {yards}! {downResult}', colorAnalysis: 'That second effort got him an extra three or four yards.', crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} with a nice gain of {yards} on the carry!', colorAnalysis: "{rusher} is really starting to find his rhythm for {teamName}.", crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} makes a man miss and picks up {yards}!', colorAnalysis: 'The {defTeamName} defensive coordinator is shaking his head.', crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} churns his legs for {yards} yards! {downResult}', colorAnalysis: 'Pure effort. He wanted that first down for {teamName}.', crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} hits the edge and turns the corner for {yards}!', colorAnalysis: "{defTeamName} can't contain the edge. That speed is a problem.", crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} with a strong run, {yards} yards!', colorAnalysis: "The {defTeamName} defense doesn't want to tackle this man one-on-one.", crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} out of {personnel} finds a lane for {yards}!', colorAnalysis: 'That heavy personnel grouping is opening holes all day for {teamName}.', crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} runs through the {stunt} stunt for {yards} yards!', colorAnalysis: '{defTeamName} tried to get cute and got burned for it.', crowdReaction: 'cheer' },
   ],
   high: [
-    { playByPlay: '{rusher} BURSTS through! {yards} yards and he is STILL going!', colorAnalysis: 'You CANNOT bring this man down!', crowdReaction: 'roar' },
-    { playByPlay: '{rusher} EXPLODES through the line! {yards} yards!', colorAnalysis: 'That is a GROWN MAN run! The defense had no answer!', crowdReaction: 'roar' },
-    { playByPlay: '{rusher} BREAKS FREE! {yards} yards and he is FLYING!', colorAnalysis: 'Look at the speed! Nobody is catching him!', crowdReaction: 'roar' },
-    { playByPlay: '{rusher} IS LOOSE! {yards} yards on a MONSTER run!', colorAnalysis: 'He just ran through the ENTIRE defense!', crowdReaction: 'roar' },
-    { playByPlay: '{rusher} SLASHES through for {yards} yards! What a run!', colorAnalysis: "That is special. You don't see runs like that very often.", crowdReaction: 'roar' },
-    { playByPlay: '{rusher} TAKES IT {yards} YARDS! He will NOT be denied!', colorAnalysis: 'I just got goosebumps watching that! WHAT a run!', crowdReaction: 'roar' },
-    { playByPlay: '{rusher} RUMBLES {yards} yards! Breaking tackles left and right!', colorAnalysis: 'He broke FOUR tackles on that run! Unbelievable!', crowdReaction: 'roar' },
-    { playByPlay: '{rusher} with a HUGE run! {yards} yards and the crowd goes wild!', colorAnalysis: 'That is the kind of play that completely shifts momentum!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} BURSTS through! {yards} yards and he is STILL going!', colorAnalysis: 'You CANNOT bring this man down! {teamName} with a HUGE play!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} EXPLODES through the {defTeamName} line! {yards} yards!', colorAnalysis: 'That is a GROWN MAN run! {defTeamName} had no answer!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} BREAKS FREE! {yards} yards and he is FLYING!', colorAnalysis: 'Look at the speed! Nobody from {defTeamName} is catching him!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} IS LOOSE! {yards} yards on a MONSTER run for {teamName}!', colorAnalysis: 'He just ran through the ENTIRE {defTeamName} defense!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} SLASHES through for {yards} yards! What a run!', colorAnalysis: "That is special. {teamName} needed that big play.", crowdReaction: 'roar' },
+    { playByPlay: '{rusher} TAKES IT {yards} YARDS! He will NOT be denied!', colorAnalysis: 'I just got goosebumps watching that! WHAT a run by {rusher}!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} RUMBLES {yards} yards! Breaking {defTeamName} tackles left and right!', colorAnalysis: 'He broke FOUR tackles on that run! Unbelievable!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} with a HUGE run! {yards} yards and the crowd goes wild!', colorAnalysis: 'That is the kind of play that completely shifts momentum for {teamName}!', crowdReaction: 'roar' },
   ],
 };
 
@@ -81,44 +81,44 @@ const RUN_TEMPLATES: TemplateCategory = {
 
 const PASS_COMPLETE_TEMPLATES: TemplateCategory = {
   low: [
-    { playByPlay: '{passer} finds {receiver} for {yards}.', colorAnalysis: 'Good timing on that route.', crowdReaction: 'murmur' },
-    { playByPlay: '{passer} hits {receiver} underneath for {yards} yards.', colorAnalysis: 'Take what the defense gives you.', crowdReaction: 'murmur' },
-    { playByPlay: '{passer} connects with {receiver} for a gain of {yards}.', colorAnalysis: 'Smart, efficient passing right there.', crowdReaction: 'murmur' },
-    { playByPlay: 'Quick pass to {receiver}, picks up {yards}.', colorAnalysis: "Get the ball out quick, that's the game plan.", crowdReaction: 'murmur' },
-    { playByPlay: '{passer} dumps it off to {receiver} for {yards} yards.', colorAnalysis: "That's the check-down, but it moves the sticks.", crowdReaction: 'murmur' },
-    { playByPlay: '{passer} to {receiver} on the crossing route, {yards} yards.', colorAnalysis: 'Nice anticipation. The ball was out before the break.', crowdReaction: 'murmur' },
-    { playByPlay: '{passer} completes to {receiver} for {yards}.', colorAnalysis: 'He saw the zone coverage and found the soft spot.', crowdReaction: 'murmur' },
-    { playByPlay: 'Short pass, {passer} to {receiver} for {yards} yards.', colorAnalysis: 'Easy pitch and catch. Sometimes simple is best.', crowdReaction: 'murmur' },
-    { playByPlay: '{passer} swings it to {receiver} for {yards}.', colorAnalysis: "That's how you sustain drives. Methodical.", crowdReaction: 'murmur' },
-    { playByPlay: '{passer} flips it to {receiver}, gains {yards}.', colorAnalysis: 'Screen game working nicely so far.', crowdReaction: 'murmur' },
+    { playByPlay: '{down} and {distance}. {passer} finds {receiver} for {yards}. {downResult}', colorAnalysis: 'Good timing on that route for {teamName}.', crowdReaction: 'murmur' },
+    { playByPlay: '{passer} hits {receiver} underneath for {yards} yards. {downResult}', colorAnalysis: '{teamName} taking what the {defTeamName} defense gives them.', crowdReaction: 'murmur' },
+    { playByPlay: '{passer} connects with {receiver} for a gain of {yards}. {downResult}', colorAnalysis: 'Smart, efficient passing from {passer}.', crowdReaction: 'murmur' },
+    { playByPlay: '{down} and {distance}. Quick pass to {receiver}, picks up {yards}.', colorAnalysis: "Get the ball out quick against this {defTeamName} pass rush.", crowdReaction: 'murmur' },
+    { playByPlay: '{passer} dumps it off to {receiver} for {yards} yards.', colorAnalysis: "That's the check-down, but it moves the sticks for {teamName}.", crowdReaction: 'murmur' },
+    { playByPlay: '{passer} to {receiver} on the crossing route, {yards} yards. {downResult}', colorAnalysis: 'Nice anticipation by {passer}. The ball was out before the break.', crowdReaction: 'murmur' },
+    { playByPlay: '{passer} completes to {receiver} for {yards}. {downResult}', colorAnalysis: 'He saw the {defTeamName} zone coverage and found the soft spot.', crowdReaction: 'murmur' },
+    { playByPlay: '{down} and {distance}. Short pass, {passer} to {receiver} for {yards} yards.', colorAnalysis: 'Easy pitch and catch. {teamName} moving methodically.', crowdReaction: 'murmur' },
+    { playByPlay: '{passer} swings it to {receiver} for {yards}. {downResult}', colorAnalysis: "That's how {teamName} sustains drives. Methodical.", crowdReaction: 'murmur' },
+    { playByPlay: '{passer} flips it to {receiver}, gains {yards}.', colorAnalysis: '{teamName} screen game working nicely so far.', crowdReaction: 'murmur' },
   ],
   medium: [
-    { playByPlay: '{passer} delivers a strike to {receiver} for {yards} yards!', colorAnalysis: 'That ball was placed perfectly.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} fires to {receiver} and he picks up {yards}!', colorAnalysis: 'Threading the needle right there. Elite throw.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} with a dart to {receiver}! {yards} yards!', colorAnalysis: "That window was TINY and he fit it in. That's why he's a pro.", crowdReaction: 'cheer' },
-    { playByPlay: '{passer} finds {receiver} on the sideline for {yards}!', colorAnalysis: 'Beautiful touch on that throw. Dropped it in the bucket.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} over the middle to {receiver} for {yards} yards!', colorAnalysis: 'Gutsy throw. You need courage to throw into that traffic.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} hits {receiver} in stride for {yards}!', colorAnalysis: 'Perfect ball placement. The receiver never had to break stride.', crowdReaction: 'cheer' },
-    { playByPlay: '{receiver} with a great catch! {yards} yards from {passer}!', colorAnalysis: "That's a contested catch and he came down with it.", crowdReaction: 'cheer' },
-    { playByPlay: '{passer} finds the open man! {receiver} for {yards} yards!', colorAnalysis: 'He went through his progressions and found the soft spot.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} connects with {receiver} across the middle for {yards}!', colorAnalysis: "That's a money throw. That's what separates the great ones.", crowdReaction: 'cheer' },
-    { playByPlay: '{passer} zips it to {receiver} for {yards} yards!', colorAnalysis: 'Look at the zip on that ball. Perfectly timed.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} reads the coverage and hits {receiver} on the {concept} concept for {yards}!', colorAnalysis: "That's the pre-snap read paying off. He knew exactly where to go with it.", crowdReaction: 'cheer' },
-    { playByPlay: '{passer} out of {personnel}, fires to {receiver} for {yards} yards!', colorAnalysis: 'That personnel grouping gave them the matchup they wanted.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} runs the {concept} route perfectly with {receiver} for {yards}!', colorAnalysis: "The defense can't cover that route concept. It's schemed wide open.", crowdReaction: 'cheer' },
-    { playByPlay: '{passer} hits {receiver} on the {concept} for {yards} against the {front} front!', colorAnalysis: 'That defensive front left them vulnerable in coverage.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} delivers a strike to {receiver} for {yards} yards! {downResult}', colorAnalysis: 'That ball was placed perfectly by the {teamName} quarterback.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} fires to {receiver} and he picks up {yards}!', colorAnalysis: 'Threading the needle against {defTeamName}. Elite throw.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} with a dart to {receiver}! {yards} yards! {downResult}', colorAnalysis: "That window was TINY and he fit it in. That's why he starts for {teamName}.", crowdReaction: 'cheer' },
+    { playByPlay: '{passer} finds {receiver} on the sideline for {yards}!', colorAnalysis: 'Beautiful touch on that throw. Dropped it right in the bucket.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} over the middle to {receiver} for {yards} yards! {downResult}', colorAnalysis: 'Gutsy throw into the {defTeamName} coverage. You need courage for that.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} hits {receiver} in stride for {yards}!', colorAnalysis: 'Perfect ball placement. {receiver} never had to break stride.', crowdReaction: 'cheer' },
+    { playByPlay: '{receiver} with a great catch! {yards} yards from {passer}!', colorAnalysis: "Contested catch against {defTeamName} and he came down with it.", crowdReaction: 'cheer' },
+    { playByPlay: '{passer} finds the open man! {receiver} for {yards} yards! {downResult}', colorAnalysis: 'He went through his progressions and found the soft spot in the {defTeamName} zone.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} connects with {receiver} across the middle for {yards}!', colorAnalysis: "Money throw by {passer}. That's what separates the great ones.", crowdReaction: 'cheer' },
+    { playByPlay: '{passer} zips it to {receiver} for {yards} yards! {downResult}', colorAnalysis: 'Look at the zip on that ball. {teamName} is clicking.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} reads the {defTeamName} coverage and hits {receiver} on the {concept} concept for {yards}!', colorAnalysis: "That's the pre-snap read paying off. He knew exactly where to go with it.", crowdReaction: 'cheer' },
+    { playByPlay: '{passer} out of {personnel}, fires to {receiver} for {yards} yards!', colorAnalysis: 'That personnel grouping gave {teamName} the matchup they wanted.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} runs the {concept} route perfectly with {receiver} for {yards}!', colorAnalysis: "{defTeamName} can't cover that route concept. It's schemed wide open.", crowdReaction: 'cheer' },
+    { playByPlay: '{passer} hits {receiver} on the {concept} for {yards} against the {front} front!', colorAnalysis: 'That {defTeamName} front left them vulnerable in coverage.', crowdReaction: 'cheer' },
   ],
   high: [
-    { playByPlay: '{passer} LAUNCHES it deep... {receiver} HAS IT! {yards} YARDS!', colorAnalysis: 'WHAT a throw! WHAT a catch! This crowd is on their FEET!', crowdReaction: 'roar' },
-    { playByPlay: '{passer} FIRES it downfield! {receiver} MAKES THE GRAB! {yards} yards!', colorAnalysis: 'That is an INCREDIBLE throw and catch! You will see that on every highlight reel tonight!', crowdReaction: 'roar' },
-    { playByPlay: '{passer} AIRS IT OUT! {receiver} HAULS IT IN! {yards} YARDS!', colorAnalysis: 'That was FIFTY-PLUS yards in the air! PERFECT ball!', crowdReaction: 'roar' },
-    { playByPlay: '{receiver} IS WIDE OPEN! {passer} finds him for {yards} YARDS!', colorAnalysis: 'Somebody blew that coverage and they PAID for it!', crowdReaction: 'roar' },
-    { playByPlay: '{passer} ROCKETS one to {receiver}! {yards} yards! What a PLAY!', colorAnalysis: "I don't know how he threw that ball. That is SPECIAL.", crowdReaction: 'roar' },
-    { playByPlay: 'DEEP BALL! {passer} to {receiver}! {yards} yards and the sideline is GOING CRAZY!', colorAnalysis: 'That is a BEAUTIFUL throw! Right on the money!', crowdReaction: 'roar' },
-    { playByPlay: '{passer} lets it FLY! {receiver} goes UP and GETS IT! {yards} yards!', colorAnalysis: 'Moss-like! That was a man among boys right there!', crowdReaction: 'roar' },
-    { playByPlay: '{receiver} with a SPECTACULAR catch! {yards} yards from {passer}!', colorAnalysis: 'Are you KIDDING me?! How did he hold on to that?!', crowdReaction: 'roar' },
-    { playByPlay: '{passer} reads the coverage PERFECTLY! The {concept} concept is MONEY! {yards} YARDS!', colorAnalysis: 'THAT is what happens when you scheme against that coverage! BRILLIANT!', crowdReaction: 'roar' },
-    { playByPlay: '{passer} with the {concept} route to {receiver}! {yards} YARDS! INCREDIBLE!', colorAnalysis: 'You CANNOT defend that concept when it is run THAT well!', crowdReaction: 'roar' },
+    { playByPlay: '{passer} LAUNCHES it deep... {receiver} HAS IT! {yards} YARDS!', colorAnalysis: 'WHAT a throw! WHAT a catch! {teamName} with a HUGE play!', crowdReaction: 'roar' },
+    { playByPlay: '{passer} FIRES it downfield! {receiver} MAKES THE GRAB! {yards} yards!', colorAnalysis: 'INCREDIBLE throw and catch for {teamName}! Highlight reel!', crowdReaction: 'roar' },
+    { playByPlay: '{passer} AIRS IT OUT! {receiver} HAULS IT IN! {yards} YARDS!', colorAnalysis: 'PERFECT ball by {passer}! {defTeamName} had NO answer!', crowdReaction: 'roar' },
+    { playByPlay: '{receiver} IS WIDE OPEN! {passer} finds him for {yards} YARDS!', colorAnalysis: '{defTeamName} blew that coverage and PAID for it!', crowdReaction: 'roar' },
+    { playByPlay: '{passer} ROCKETS one to {receiver}! {yards} yards! What a PLAY!', colorAnalysis: "I don't know how he threw that ball. {passer} is SPECIAL.", crowdReaction: 'roar' },
+    { playByPlay: 'DEEP BALL! {passer} to {receiver}! {yards} yards and the {teamName} sideline is GOING CRAZY!', colorAnalysis: 'That is a BEAUTIFUL throw! Right on the money!', crowdReaction: 'roar' },
+    { playByPlay: '{passer} lets it FLY! {receiver} goes UP and GETS IT! {yards} yards!', colorAnalysis: 'Moss-like! {receiver} was a man among boys on that play!', crowdReaction: 'roar' },
+    { playByPlay: '{receiver} with a SPECTACULAR catch! {yards} yards from {passer}!', colorAnalysis: 'Are you KIDDING me?! How did he hold on to that against {defTeamName}?!', crowdReaction: 'roar' },
+    { playByPlay: '{passer} reads the {defTeamName} coverage PERFECTLY! The {concept} concept is MONEY! {yards} YARDS!', colorAnalysis: 'THAT is what happens when you scheme against that coverage! BRILLIANT!', crowdReaction: 'roar' },
+    { playByPlay: '{passer} with the {concept} route to {receiver}! {yards} YARDS! INCREDIBLE!', colorAnalysis: '{defTeamName} CANNOT defend that concept when {teamName} runs it THAT well!', crowdReaction: 'roar' },
   ],
 };
 
@@ -128,28 +128,28 @@ const PASS_COMPLETE_TEMPLATES: TemplateCategory = {
 
 const PASS_INCOMPLETE_TEMPLATES: TemplateCategory = {
   low: [
-    { playByPlay: 'Pass intended for {receiver}... incomplete.', colorAnalysis: 'He just missed him there.', crowdReaction: 'murmur' },
-    { playByPlay: '{passer} throws it away. Incomplete.', colorAnalysis: 'Smart to live for another down.', crowdReaction: 'murmur' },
-    { playByPlay: '{passer} fires and it falls incomplete.', colorAnalysis: 'That coverage was tight. Nowhere to go with it.', crowdReaction: 'murmur' },
-    { playByPlay: 'Pass is incomplete. {receiver} couldn\'t come up with it.', colorAnalysis: 'Tough catch, but you\'d like to see him make that one.', crowdReaction: 'murmur' },
-    { playByPlay: '{passer} misses {receiver}. Incomplete.', colorAnalysis: 'Just a bit overthrown. They weren\'t on the same page.', crowdReaction: 'murmur' },
-    { playByPlay: 'Incomplete. Ball sails over {receiver}\'s head.', colorAnalysis: 'His back foot slipped. Couldn\'t drive that ball.', crowdReaction: 'murmur' },
-    { playByPlay: '{passer} looking right... throws... incomplete.', colorAnalysis: 'The window just wasn\'t there.', crowdReaction: 'murmur' },
-    { playByPlay: 'Pass is batted down at the line! Incomplete.', colorAnalysis: 'Those big defensive linemen getting their hands up.', crowdReaction: 'murmur' },
+    { playByPlay: '{down} and {distance}. Pass intended for {receiver}... incomplete.', colorAnalysis: '{passer} just missed him there.', crowdReaction: 'murmur' },
+    { playByPlay: '{passer} throws it away. Incomplete.', colorAnalysis: 'Smart by {passer} to live for another down.', crowdReaction: 'murmur' },
+    { playByPlay: '{down} and {distance}. {passer} fires and it falls incomplete.', colorAnalysis: '{defTeamName} coverage was tight. Nowhere to go with it.', crowdReaction: 'murmur' },
+    { playByPlay: 'Pass is incomplete. {receiver} couldn\'t come up with it.', colorAnalysis: 'Tough catch, but {teamName} would like to see him make that one.', crowdReaction: 'murmur' },
+    { playByPlay: '{passer} misses {receiver}. Incomplete.', colorAnalysis: 'Just a bit overthrown. {teamName} not in sync on that one.', crowdReaction: 'murmur' },
+    { playByPlay: 'Incomplete. Ball sails over {receiver}\'s head.', colorAnalysis: '{passer} couldn\'t drive that ball. Back foot slipped.', crowdReaction: 'murmur' },
+    { playByPlay: '{passer} looking right... throws... incomplete.', colorAnalysis: 'The window wasn\'t there against {defTeamName}.', crowdReaction: 'murmur' },
+    { playByPlay: 'Pass is batted down at the line! Incomplete.', colorAnalysis: '{defTeamName} big men getting their hands up.', crowdReaction: 'murmur' },
   ],
   medium: [
-    { playByPlay: '{passer} heaves it deep for {receiver}... just out of reach!', colorAnalysis: 'Oh, that was so close. Another foot and that\'s a huge play.', crowdReaction: 'groan' },
-    { playByPlay: '{passer} fires... {defender} breaks it up! Incomplete!', colorAnalysis: 'Great coverage there. He was in perfect position.', crowdReaction: 'groan' },
-    { playByPlay: '{receiver} dives for it... can\'t hang on! Incomplete!', colorAnalysis: 'He got his hands on it but the ground knocked it loose.', crowdReaction: 'groan' },
-    { playByPlay: '{passer} under pressure, throws it up for {receiver}... drops it!', colorAnalysis: 'He had his man if that ball is on target. Missed opportunity.', crowdReaction: 'groan' },
-    { playByPlay: 'What a play by {defender}! Pass broken up!', colorAnalysis: 'That was a money throw but an even better defensive play.', crowdReaction: 'groan' },
-    { playByPlay: '{passer} goes deep... {receiver} can\'t pull it in!', colorAnalysis: 'He\'ll be thinking about that one all week.', crowdReaction: 'groan' },
+    { playByPlay: '{passer} heaves it deep for {receiver}... just out of reach!', colorAnalysis: 'Oh, that was so close. Another foot and that\'s a huge play for {teamName}.', crowdReaction: 'groan' },
+    { playByPlay: '{passer} fires... {defender} breaks it up! Incomplete!', colorAnalysis: 'Great coverage by {defender}. {defTeamName} in perfect position.', crowdReaction: 'groan' },
+    { playByPlay: '{receiver} dives for it... can\'t hang on! Incomplete!', colorAnalysis: 'He got his hands on it but the ground knocked it loose. {teamName} can\'t catch a break.', crowdReaction: 'groan' },
+    { playByPlay: '{passer} under pressure, throws it up for {receiver}... drops it!', colorAnalysis: '{teamName} had their man if that ball is on target. Missed opportunity.', crowdReaction: 'groan' },
+    { playByPlay: 'What a play by {defender}! Pass broken up!', colorAnalysis: 'Money throw by {passer} but an even better play by {defTeamName}.', crowdReaction: 'groan' },
+    { playByPlay: '{passer} goes deep for {receiver}... can\'t pull it in!', colorAnalysis: '{receiver} will be thinking about that one all week.', crowdReaction: 'groan' },
   ],
   high: [
-    { playByPlay: '{passer} LAUNCHES it deep... {receiver} can\'t get there! So close!', colorAnalysis: 'INCHES away from a game-changing play! The crowd just had its heart broken!', crowdReaction: 'gasp' },
-    { playByPlay: '{receiver} HAD IT! And it goes right through his hands!', colorAnalysis: 'Oh no. Oh no no no. That was right in his hands!', crowdReaction: 'gasp' },
-    { playByPlay: '{passer} fires into the end zone... DROPPED! Incomplete!', colorAnalysis: 'You HAVE to make that catch. That was the game right there.', crowdReaction: 'gasp' },
-    { playByPlay: 'WIDE OPEN! {receiver} DROPS IT! Incomplete!', colorAnalysis: 'I cannot BELIEVE he dropped that ball. He was WIDE OPEN.', crowdReaction: 'gasp' },
+    { playByPlay: '{passer} LAUNCHES it deep... {receiver} can\'t get there! So close!', colorAnalysis: 'INCHES away from a game-changing play for {teamName}!', crowdReaction: 'gasp' },
+    { playByPlay: '{receiver} HAD IT! And it goes right through his hands!', colorAnalysis: 'Oh no. That was right in his hands! {teamName} cannot believe it!', crowdReaction: 'gasp' },
+    { playByPlay: '{passer} fires into the end zone for {teamName}... DROPPED! Incomplete!', colorAnalysis: 'You HAVE to make that catch. That was the game right there.', crowdReaction: 'gasp' },
+    { playByPlay: 'WIDE OPEN! {receiver} DROPS IT! Incomplete!', colorAnalysis: 'I cannot BELIEVE he dropped that ball. {teamName} left points on the field.', crowdReaction: 'gasp' },
   ],
 };
 
@@ -159,24 +159,24 @@ const PASS_INCOMPLETE_TEMPLATES: TemplateCategory = {
 
 const SACK_TEMPLATES: TemplateCategory = {
   low: [
-    { playByPlay: '{passer} is brought down for a loss of {yards}.', colorAnalysis: 'The pass rush got home there.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} sacked, loses {yards} yards.', colorAnalysis: "He held the ball too long. You've got to get rid of it.", crowdReaction: 'cheer' },
-    { playByPlay: '{defender} gets to {passer} for a sack. Loss of {yards}.', colorAnalysis: 'The pocket collapsed from the blind side.', crowdReaction: 'cheer' },
-    { playByPlay: '{passer} is taken down behind the line. Loss of {yards}.', colorAnalysis: 'Protection broke down on the right side.', crowdReaction: 'cheer' },
+    { playByPlay: '{down} and {distance}. {passer} is brought down for a loss of {yards}.', colorAnalysis: '{defTeamName} pass rush got home there.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} sacked, loses {yards} yards.', colorAnalysis: "{passer} held the ball too long. You've got to get rid of it.", crowdReaction: 'cheer' },
+    { playByPlay: '{defender} gets to {passer} for a sack. Loss of {yards}.', colorAnalysis: '{teamName} pocket collapsed from the blind side.', crowdReaction: 'cheer' },
+    { playByPlay: '{passer} is taken down behind the line. Loss of {yards}.', colorAnalysis: '{teamName} protection broke down. {defTeamName} gets to him.', crowdReaction: 'cheer' },
   ],
   medium: [
-    { playByPlay: '{defender} GETS to {passer}! Sacked for a loss of {yards}!', colorAnalysis: 'He came in UNTOUCHED! The left tackle completely whiffed!', crowdReaction: 'roar' },
-    { playByPlay: '{passer} goes DOWN! Sacked by {defender} for a loss of {yards}!', colorAnalysis: "That's a huge play for the defense. Big momentum shift.", crowdReaction: 'roar' },
-    { playByPlay: '{defender} blows past the blocker and DROPS {passer}! Loss of {yards}!', colorAnalysis: 'Speed kills! That pass rush is relentless today!', crowdReaction: 'roar' },
-    { playByPlay: 'SACK! {defender} wraps up {passer} for a loss of {yards}!', colorAnalysis: 'The offensive line is struggling to handle that pass rush.', crowdReaction: 'roar' },
-    { playByPlay: '{defender} runs the {rushGame} game and GETS {passer}! Loss of {yards}!', colorAnalysis: 'That twist stunt completely fooled the offensive line!', crowdReaction: 'roar' },
-    { playByPlay: '{defender} off the {front} front GETS to {passer}! Sacked for a loss of {yards}!', colorAnalysis: 'That front alignment gave them the mismatch they wanted.', crowdReaction: 'roar' },
+    { playByPlay: '{defender} GETS to {passer}! Sacked for a loss of {yards}!', colorAnalysis: 'He came in UNTOUCHED! The {teamName} left tackle completely whiffed!', crowdReaction: 'roar' },
+    { playByPlay: '{passer} goes DOWN! Sacked by {defender} for a loss of {yards}!', colorAnalysis: "Huge play for {defTeamName}! Big momentum shift.", crowdReaction: 'roar' },
+    { playByPlay: '{defender} blows past the blocker and DROPS {passer}! Loss of {yards}!', colorAnalysis: 'Speed kills! {defTeamName} pass rush is relentless today!', crowdReaction: 'roar' },
+    { playByPlay: 'SACK! {defender} wraps up {passer} for a loss of {yards}!', colorAnalysis: '{teamName} offensive line struggling to handle this {defTeamName} rush.', crowdReaction: 'roar' },
+    { playByPlay: '{defender} runs the {rushGame} game and GETS {passer}! Loss of {yards}!', colorAnalysis: 'That twist stunt completely fooled the {teamName} offensive line!', crowdReaction: 'roar' },
+    { playByPlay: '{defender} off the {front} front GETS to {passer}! Sacked for a loss of {yards}!', colorAnalysis: 'That {defTeamName} front alignment gave them the mismatch they wanted.', crowdReaction: 'roar' },
   ],
   high: [
-    { playByPlay: '{defender} CRUSHES {passer}! HUGE SACK! Loss of {yards}!', colorAnalysis: "That is a DEVASTATING hit! He didn't even see him coming!", crowdReaction: 'roar' },
-    { playByPlay: '{passer} is HAMMERED by {defender}! DOWN he goes! Loss of {yards}!', colorAnalysis: 'WHAT A PLAY! The defense is FIRED UP after that one!', crowdReaction: 'roar' },
-    { playByPlay: 'STRIP SACK! {defender} LEVELS {passer}! Loss of {yards}!', colorAnalysis: 'Oh my! That could change EVERYTHING!', crowdReaction: 'roar' },
-    { playByPlay: '{defender} comes SCREAMING off the edge and BURIES {passer}! Loss of {yards}!', colorAnalysis: 'That man is UNBLOCKABLE today!', crowdReaction: 'roar' },
+    { playByPlay: '{defender} CRUSHES {passer}! HUGE SACK! Loss of {yards}!', colorAnalysis: "DEVASTATING hit! {passer} didn't even see him coming!", crowdReaction: 'roar' },
+    { playByPlay: '{passer} is HAMMERED by {defender}! DOWN he goes! Loss of {yards}!', colorAnalysis: 'WHAT A PLAY! {defTeamName} defense is FIRED UP after that one!', crowdReaction: 'roar' },
+    { playByPlay: 'STRIP SACK! {defender} LEVELS {passer}! Loss of {yards}!', colorAnalysis: 'Oh my! That could change EVERYTHING for {defTeamName}!', crowdReaction: 'roar' },
+    { playByPlay: '{defender} comes SCREAMING off the edge and BURIES {passer}! Loss of {yards}!', colorAnalysis: '{defender} is UNBLOCKABLE today! {teamName} has no answer!', crowdReaction: 'roar' },
   ],
 };
 
@@ -186,17 +186,17 @@ const SACK_TEMPLATES: TemplateCategory = {
 
 const SCRAMBLE_TEMPLATES: TemplateCategory = {
   low: [
-    { playByPlay: '{rusher} scrambles for {yards} yards.', colorAnalysis: 'Nothing was there in the passing game, so he took off.', crowdReaction: 'murmur' },
-    { playByPlay: '{rusher} tucks it and runs for {yards}.', colorAnalysis: 'Good decision to pull it down and take the yards.', crowdReaction: 'murmur' },
+    { playByPlay: '{rusher} scrambles for {yards} yards. {downResult}', colorAnalysis: 'Nothing was there against {defTeamName}, so {rusher} took off.', crowdReaction: 'murmur' },
+    { playByPlay: '{rusher} tucks it and runs for {yards}. {downResult}', colorAnalysis: 'Good decision by {rusher} to pull it down and take the yards.', crowdReaction: 'murmur' },
   ],
   medium: [
-    { playByPlay: '{rusher} breaks the pocket and scrambles for {yards}!', colorAnalysis: "You can't coach that kind of athleticism at quarterback!", crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} escapes the rush and picks up {yards} on the scramble!', colorAnalysis: 'That is a nightmare for the defense when he can do that.', crowdReaction: 'cheer' },
-    { playByPlay: '{rusher} buys time and takes off for {yards} yards!', colorAnalysis: 'He made something out of nothing on that play.', crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} breaks the {teamName} pocket and scrambles for {yards}!', colorAnalysis: "You can't coach that kind of athleticism at quarterback!", crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} escapes the {defTeamName} rush and picks up {yards}!', colorAnalysis: 'That is a nightmare for {defTeamName} when he can do that.', crowdReaction: 'cheer' },
+    { playByPlay: '{rusher} buys time and takes off for {yards} yards! {downResult}', colorAnalysis: '{rusher} made something out of nothing on that play.', crowdReaction: 'cheer' },
   ],
   high: [
-    { playByPlay: '{rusher} ELUDES the rush and TAKES OFF! {yards} yards on the scramble!', colorAnalysis: 'He is a MAGICIAN back there! Houdini could not have escaped that pocket!', crowdReaction: 'roar' },
-    { playByPlay: '{rusher} BREAKS FREE and RACES for {yards} yards!', colorAnalysis: 'When he starts running it is OVER! Nobody is catching that man!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} ELUDES the {defTeamName} rush and TAKES OFF! {yards} yards!', colorAnalysis: '{rusher} is a MAGICIAN back there! Houdini could not have escaped that pocket!', crowdReaction: 'roar' },
+    { playByPlay: '{rusher} BREAKS FREE and RACES for {yards} yards!', colorAnalysis: 'When {rusher} starts running it is OVER! Nobody from {defTeamName} is catching him!', crowdReaction: 'roar' },
   ],
 };
 
@@ -337,11 +337,11 @@ const PUNT_TEMPLATES: TemplateCategory = {
 // ---------------------------------------------------------------------------
 
 const KICKOFF_TEMPLATES: CommentaryTemplate[] = [
-  { playByPlay: 'Kickoff sails into the end zone. Touchback.', colorAnalysis: "They'll start at the 25.", crowdReaction: 'murmur' },
-  { playByPlay: 'The kick is away! Touchback. Ball on the 25.', colorAnalysis: 'No reason to bring that one out.', crowdReaction: 'murmur' },
-  { playByPlay: 'Kickoff received at the {yards}. Return to the {fieldPosition}.', colorAnalysis: 'Decent return. Got past the 25.', crowdReaction: 'murmur' },
-  { playByPlay: 'And we are underway! Kickoff lands at the goal line, touchback.', colorAnalysis: 'Smart to take a knee. Start from the 25.', crowdReaction: 'murmur' },
-  { playByPlay: 'Kicked deep. Touchback.', colorAnalysis: "Standard start here. Ball on the 25-yard line for {teamName}.", crowdReaction: 'murmur' },
+  { playByPlay: '{teamName} kicks it away. Into the end zone. Touchback.', colorAnalysis: "{defTeamName} will start at the 25.", crowdReaction: 'murmur' },
+  { playByPlay: 'The kick is away from {teamName}! Touchback. Ball on the 25.', colorAnalysis: 'No reason to bring that one out. {defTeamName} ball.', crowdReaction: 'murmur' },
+  { playByPlay: '{teamName} kicks off. Received at the {yards}. Return to the {fieldPosition}.', colorAnalysis: 'Decent return for {defTeamName}. Got past the 25.', crowdReaction: 'murmur' },
+  { playByPlay: 'And we are underway! {teamName} kicks it to the goal line, touchback.', colorAnalysis: 'Smart to take a knee. {defTeamName} starts from the 25.', crowdReaction: 'murmur' },
+  { playByPlay: '{teamName} kicks it deep. Touchback.', colorAnalysis: "Standard start. Ball on the 25-yard line for {defTeamName}.", crowdReaction: 'murmur' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -378,9 +378,9 @@ const TWO_POINT_FAIL_TEMPLATES: CommentaryTemplate[] = [
 // ---------------------------------------------------------------------------
 
 const KNEEL_TEMPLATES: CommentaryTemplate[] = [
-  { playByPlay: '{rusher} takes a knee.', colorAnalysis: 'Running out the clock here.', crowdReaction: 'murmur' },
-  { playByPlay: 'Victory formation. {rusher} kneels on it.', colorAnalysis: 'And that should just about do it.', crowdReaction: 'murmur' },
-  { playByPlay: '{rusher} kneels it down.', colorAnalysis: 'Killing the clock. Smart football.', crowdReaction: 'murmur' },
+  { playByPlay: '{rusher} takes a knee. {clock} remaining.', colorAnalysis: '{teamName} running out the clock.', crowdReaction: 'murmur' },
+  { playByPlay: 'Victory formation. {rusher} kneels on it.', colorAnalysis: 'And that should just about do it for {teamName}.', crowdReaction: 'murmur' },
+  { playByPlay: '{rusher} kneels it down. {clock} left.', colorAnalysis: '{teamName} killing the clock. Ball game.', crowdReaction: 'murmur' },
 ];
 
 const SPIKE_TEMPLATES: CommentaryTemplate[] = [
@@ -813,12 +813,25 @@ export function buildTemplateVars(
   const defendingTeam =
     state.possession === 'home' ? state.awayTeam : state.homeTeam;
 
+  // Build down result text (what happened after the play)
+  let downResult = '';
+  if (play.isFirstDown && !play.isTouchdown) {
+    downResult = 'First down!';
+  } else if (play.isTouchdown) {
+    downResult = '';
+  } else if (state.down < 4) {
+    const nextDown = state.down + 1;
+    const remaining = Math.max(1, state.yardsToGo - play.yardsGained);
+    downResult = `That brings up ${formatDown(nextDown as 1|2|3|4)} and ${remaining}.`;
+  }
+
   const vars: Record<string, string> = {
     teamName: possessionTeam.name,
     defTeamName: defendingTeam.name,
     yards: Math.abs(play.yardsGained).toString(),
     down: formatDown(state.down),
     distance: state.yardsToGo.toString(),
+    downResult,
     fieldPosition: formatFieldPosition(state.ballPosition),
     clock: formatClockForTemplate(state.clock),
     quarter: formatQuarterForTemplate(state.quarter),
