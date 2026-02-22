@@ -98,6 +98,7 @@ async function seed() {
       awareness: p.awareness,
       clutchRating: p.clutchRating,
       injuryProne: p.injuryProne,
+      ...('espnId' in p && p.espnId ? { espnId: p.espnId } : {}),
     }));
 
     await db.insert(schema.players).values(playerValues);
