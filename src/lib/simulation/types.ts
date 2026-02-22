@@ -325,6 +325,8 @@ export interface PlayResult {
   personnelGrouping?: PersonnelGrouping;
   /** Named route concept used on pass plays. */
   routeConcept?: RouteConcept;
+  /** Kickoff metadata for visualization (distance, hang time, catch spot). */
+  kickoffMeta?: { distance: number; hangTime: number; catchSpot: number };
 }
 
 // ============================================================

@@ -190,7 +190,8 @@ export function useGameStream(gameId: string | null): GameStreamState & {
             // Reconnect seamlessly without resetting UI state.
             isReconnectingRef.current = true;
             reconnectAttemptRef.current = 0;
-            setTimeout(() => connect(), 100);
+            // Store in ref so clearTimers() cancels it on gameId change
+            reconnectTimeoutRef.current = setTimeout(() => connect(), 100);
             break;
           }
 

@@ -34,7 +34,7 @@ Run a single test file: `npx vitest run tests/unit/simulation/engine.test.ts`
 
 ### Simulation State Machine (`/api/simulate`)
 
-The core loop is a cron-driven state machine at `src/app/api/simulate/route.ts`, authorized via `Authorization: Bearer <CRON_SECRET>`. The state machine logic is extracted as a pure function `determineNextAction()` in `src/lib/scheduling/scheduler.ts` (no DB side effects, fully testable). The route handler calls this and executes the returned action:
+The core loop is a cron-driven state machine at `src/app/api/simulate/route.ts`, authorized via `Authorization: Bearer <CRON_SECRET>`. The route handler contains `determineNextAction()` which queries DB state and returns the next action. A separate pure-function version exists in `src/lib/scheduling/scheduler.ts` for testing. The route handler executes the returned action:
 
 1. **create_season** — No active season; generates 18-week schedule (236 games) via `generateSeasonSchedule()`
 2. **start_game** — Picks next game, runs `simulateGame()`, stores all events, sets game to "broadcasting"
@@ -104,6 +104,7 @@ Post-hoc AI commentary via Anthropic Claude Sonnet. Rate-limited (10 req/min), b
 - **Schema**: `src/lib/db/schema.ts` — teams, players, seasons, games, game_events, standings, predictions, user_scores, jumbotron_messages
 - **Connection**: Lazy-initialized singleton via Proxy in `src/lib/db/index.ts`
 - **JSONB columns**: `boxScore`, `playResult`, `narrativeContext` stored as JSONB for flexibility
+- **`games.gameDurationMs`**: Stores actual event stream duration (last event's `displayTimestamp`) at broadcast start. Used by `projectFutureGameTimes()` for accurate schedule projections
 - **Queries**: `src/lib/db/queries/` — games.ts, teams.ts, events.ts, predictions.ts, leaderboard.ts
 - **RLS**: `scripts/enable-rls.sql` enables Row Level Security — all tables public-read, writes via service_role key
 
@@ -112,7 +113,9 @@ Post-hoc AI commentary via Anthropic Claude Sonnet. Rate-limited (10 req/min), b
 - `use-game-stream.ts` — SSE connection with exponential backoff, catchup playback, state management
 - `use-momentum.ts` — Derives running momentum from accumulated events
 - `use-dynamic-tab.ts` — Updates browser tab title to live score and draws a split favicon with both team logos using Canvas API
-- `use-crowd-audio.ts` — Web Audio API: ambient crowd loop, reaction sounds (cheer/boo/gasp), peak sounds (TD roar). Audio files expected at `public/audio/*.mp3`
+- `use-broadcaster-audio.ts` — Web Speech API text-to-speech broadcaster narration with male/female voice toggle. Speaks `commentary.playByPlay` for each play, varies rate by excitement level. Default off (user enables via mic button)
+- `use-procedural-audio.ts` — Procedural crowd audio via Web Audio API (pink noise + bandpass filters). No MP3 files needed. Triggers reaction one-shots by excitement level
+- `use-crowd-audio.ts` — Alternative crowd audio using pre-recorded MP3 files (ambient, reaction, peak layers). Audio files expected at `public/audio/*.mp3`
 - `use-jumbotron.ts` — Polls jumbotron API every 10s, auto-clears expired messages
 - `use-countdown.ts` — Generic countdown timer
 
@@ -179,6 +182,9 @@ Predictions and leaderboard use a cookie-based `userId` (via `x-user-id` header 
 - **Scripts need explicit DATABASE_URL** — `source .env.local` doesn't work; use `export DATABASE_URL=...` or let the script read `process.env`
 - **Simulation auth**: Vercel cron and server action both use `Authorization: Bearer <CRON_SECRET>`, not `x-cron-secret`
 - **Standings update timing**: Only updates after broadcast completes (5min delay), not when simulation starts, to prevent score spoilers
+- **Score spoiler risk**: The DB stores final scores when a game starts broadcasting (in `handleStartGame`), but the broadcast streams events over time. Server-rendered pages must NOT show `game.homeScore`/`game.awayScore` for broadcasting games — those are final scores, not current. The live score is only available client-side via the SSE event stream
+- **Game time projections**: `projectFutureGameTimes()` runs after both broadcast start and completion. Uses `gameDurationMs` (actual event stream length) + 60s buffer for precise anchoring. The next game's time is exact; further games are estimated
+- **`drizzle-kit push` may crash** on this DB due to a drizzle-kit bug with CHECK constraints. Apply migrations directly via SQL: `sql.unsafe('ALTER TABLE ...')`
 - **`maxDuration: 300`** on simulate route — games can take up to 5 minutes to simulate
 - **`seasons.totalWeeks` defaults to 22** (18 regular + 4 playoff weeks), not 18
 - **Clerk is installed but unused** — user identity is cookie-based; no `<ClerkProvider>` in layout, no middleware

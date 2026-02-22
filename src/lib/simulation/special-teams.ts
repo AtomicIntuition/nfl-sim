@@ -73,10 +73,10 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Resolve a kickoff play.
  *
- * Touchback rate: 62% of kickoffs result in a touchback (ball placed
+ * Touchback rate: ~40% of kickoffs result in a touchback (ball placed
  * at the receiving team's own 25-yard line). Otherwise, the return
  * team fields the kick and returns it. Return distance follows a
- * Gaussian distribution: mean 23 yards, stddev 8, range 10-50.
+ * Gaussian distribution: mean 23 yards, stddev 12, range 5-98.
  *
  * After any kickoff, the game clock elapsed is minimal (5-8 seconds)
  * and the clock is stopped for the change of possession.
@@ -86,9 +86,11 @@ export function resolveKickoff(
   rng: SeededRNG,
   kicker: Player | null,
   weatherMods?: WeatherModifiers,
+  returner?: Player | null,
 ): PlayResult {
   const result = basePlayResult('kickoff', 'kickoff_normal');
   const name = kickerName(kicker);
+  const returnerName = returner ? returner.name : 'the returner';
 
   // Clock: kickoffs consume 5-8 seconds, clock stops for possession change
   result.clockElapsed = rng.randomInt(
@@ -97,6 +99,8 @@ export function resolveKickoff(
   );
   result.isClockStopped = true;
 
+  // --- Existing RNG draw order preserved: touchback → OOB → fair catch → return yards ---
+
   // Touchback check (wind reduces touchback rate)
   const touchbackRate = weatherMods && weatherMods.puntDistanceMod < -3
     ? C.TOUCHBACK_RATE * 0.90
@@ -104,9 +108,18 @@ export function resolveKickoff(
   if (rng.probability(touchbackRate)) {
     result.type = 'touchback';
     result.yardsGained = 0;
-    result.description =
-      `${name} kicks it deep... taken in the end zone for a touchback. ` +
-      `Ball at the 25-yard line.`;
+    // Generate kickoff meta even for touchbacks
+    const kickDistance = rng.randomInt(62, 72);
+    const hangTime = rng.randomFloat(3.8, 4.5);
+    result.kickoffMeta = { distance: kickDistance, hangTime, catchSpot: 0 };
+    const tbDescs = [
+      `${name} kicks it deep... taken in the end zone for a touchback. Ball at the 25-yard line.`,
+      `${name} boots it through the end zone. Touchback. Ball on the 25.`,
+      `Big leg from ${name}. Into the end zone, no return. Touchback.`,
+      `${name} sends it sky-high into the end zone. Smart to take a knee. Ball at the 25.`,
+      `${name} with a booming kickoff. Touchback. ${returnerName} wisely stays put.`,
+    ];
+    result.description = tbDescs[rng.randomInt(0, tbDescs.length - 1)];
     return result;
   }
 
@@ -117,41 +130,108 @@ export function resolveKickoff(
     result.description =
       `${name} kicks it off and it sails out of bounds! Penalty on the ` +
       `kicking team. Receiving team gets the ball at their own 40-yard line.`;
-    // Mark as OOB via a special flag in the description for engine to detect
     (result as PlayResult & { kickoffOOB?: boolean }).kickoffOOB = true;
     return result;
   }
 
   // Fair catch on kickoff (~15%) — ball dead at catch spot, first-and-10
   if (rng.probability(C.KICKOFF_FAIR_CATCH_RATE)) {
-    const catchSpot = rng.randomInt(15, 30); // typically caught in deep territory
+    const catchSpot = rng.randomInt(15, 30);
+    const kickDistance = rng.randomInt(55, 65);
+    const hangTime = rng.randomFloat(3.5, 4.2);
     result.yardsGained = catchSpot;
+    result.kickoffMeta = { distance: kickDistance, hangTime, catchSpot };
     result.description =
-      `${name} kicks it deep. The returner waves for a fair catch at ` +
+      `${name} kicks it deep. ${returnerName} waves for a fair catch at ` +
       `${yardLineLabel(catchSpot)}. Ball is dead right there, first-and-10.`;
     (result as PlayResult & { kickoffFairCatch?: boolean }).kickoffFairCatch = true;
     return result;
   }
 
-  // Live return
+  // Live return — wider range allows short and long returns
   const returnYards = Math.round(
-    rng.gaussian(C.KICKOFF_RETURN_MEAN, C.KICKOFF_RETURN_STDDEV, 10, 50)
+    rng.gaussian(C.KICKOFF_RETURN_MEAN, C.KICKOFF_RETURN_STDDEV, 5, 98)
   );
+
+  // --- New RNG draws AFTER existing draws (preserves downstream determinism) ---
+
+  // Kickoff metadata for visualization
+  const kickDistance = rng.randomInt(58, 70);
+  const hangTime = rng.randomFloat(3.4, 4.3);
+  const catchSpot = rng.randomInt(2, 12);
+  result.kickoffMeta = { distance: kickDistance, hangTime, catchSpot };
+
+  // Kickoff return TD check: when return is very long, roll for TD
+  if (returnYards >= 80 && rng.probability(C.KICKOFF_RETURN_TD_RATE / (1 - C.TOUCHBACK_RATE))) {
+    result.yardsGained = 100;
+    result.isTouchdown = true;
+    result.scoring = {
+      type: 'touchdown',
+      team: state.possession === 'home' ? 'away' : 'home',
+      points: 6,
+      scorer: returner ?? null,
+    };
+    const tdDescs = [
+      `${name} kicks it deep... ${returnerName} fields it at the ${catchSpot}... he's got a wall! ` +
+        `BREAKS ONE TACKLE! TO THE 40! THE 50! HE'S GONE! KICKOFF RETURN TOUCHDOWN!`,
+      `${name} sends it end over end... ${returnerName} catches it, finds a seam... ` +
+        `NOBODY IS GOING TO CATCH HIM! ALL THE WAY! KICKOFF RETURN FOR A TOUCHDOWN!`,
+    ];
+    result.description = tdDescs[rng.randomInt(0, tdDescs.length - 1)];
+    return result;
+  }
+
   result.yardsGained = returnYards;
 
-  if (returnYards >= 40) {
-    result.description =
-      `${name} kicks it deep. Fielded at the 5... and he's got room! ` +
-      `Breaks a tackle, cuts to the sideline -- finally brought down after a ` +
-      `${returnYards}-yard return!`;
-  } else if (returnYards >= 30) {
-    result.description =
-      `${name} kicks it off. Fielded at the 8. Good return up the middle, ` +
-      `${returnYards} yards. Nice start for the offense.`;
+  // 6-tier description system
+  if (returnYards < 15) {
+    // Stuffed
+    const descs = [
+      `${name} kicks it to the ${catchSpot}. ${returnerName} is swarmed immediately -- stuffed after just ${returnYards} yards.`,
+      `${name} sends it deep. ${returnerName} picks it up... and the coverage is ALL over him. ${returnYards}-yard return, stopped cold.`,
+      `Short return for ${returnerName}. Only ${returnYards} yards -- the coverage unit was flying downfield.`,
+    ];
+    result.description = descs[rng.randomInt(0, descs.length - 1)];
+  } else if (returnYards < 25) {
+    // Average
+    const descs = [
+      `${name} kicks it away. Return of ${returnYards} yards by ${returnerName}, brought down around ${yardLineLabel(returnYards)}.`,
+      `${name} boots it deep. ${returnerName} returns it ${returnYards} yards. Standard start.`,
+      `${returnerName} fields the kick and gets ${returnYards} yards before being tackled.`,
+    ];
+    result.description = descs[rng.randomInt(0, descs.length - 1)];
+  } else if (returnYards < 35) {
+    // Good
+    const descs = [
+      `${name} kicks it off. ${returnerName} finds a lane and picks up ${returnYards} yards! Nice start for the offense.`,
+      `${returnerName} with a good return! ${returnYards} yards. The wedge opened up a crease.`,
+      `${name} sends it deep. ${returnerName} cuts upfield for a ${returnYards}-yard return. Good field position.`,
+    ];
+    result.description = descs[rng.randomInt(0, descs.length - 1)];
+  } else if (returnYards < 50) {
+    // Big
+    const descs = [
+      `${name} kicks it deep. Fielded at the ${catchSpot}... and ${returnerName}'s got room! ` +
+        `Breaks a tackle, cuts to the sideline -- finally brought down after a ${returnYards}-yard return!`,
+      `${returnerName} HAS A SEAM! ${returnYards} yards on the return! Big play by the return unit!`,
+      `Watch out! ${returnerName} makes a man miss and bursts for ${returnYards} yards! What a return!`,
+    ];
+    result.description = descs[rng.randomInt(0, descs.length - 1)];
+  } else if (returnYards < 80) {
+    // Explosive
+    const descs = [
+      `${returnerName} BREAKS FREE! ${returnYards} yards on the return! He was finally brought down inside the ${100 - returnYards}!`,
+      `HUGE return by ${returnerName}! ${returnYards} yards! Breaking tackles left and right!`,
+      `${returnerName} IS LOOSE! ${returnYards} yards before they can haul him down! What a start!`,
+    ];
+    result.description = descs[rng.randomInt(0, descs.length - 1)];
   } else {
-    result.description =
-      `${name} kicks it away. Return of ${returnYards} yards, brought down ` +
-      `around ${yardLineLabel(returnYards)}.`;
+    // House call (near-TD distance but didn't hit the TD roll)
+    const descs = [
+      `${returnerName} takes it ${returnYards} yards! He was THIS close to taking it all the way! Incredible return!`,
+      `WHAT A RETURN! ${returnerName} goes ${returnYards} yards! Finally tripped up just short of the end zone!`,
+    ];
+    result.description = descs[rng.randomInt(0, descs.length - 1)];
   }
 
   return result;
@@ -191,7 +271,8 @@ export function resolveOnsideKick(
       `${name} with the onside kick! The ball bounces... IT'S RECOVERED ` +
       `BY THE KICKING TEAM! They pounce on it at ${yardLineLabel(recoverySpot)}! ` +
       `What a play!`;
-    result.isFirstDown = true;
+    // Use dedicated flag for onside kick recovery (not isFirstDown)
+    (result as PlayResult & { onsideKickRecovered?: boolean }).onsideKickRecovered = true;
   } else {
     // Receiving team recovers (most likely outcome)
     const recoverySpot = rng.randomInt(45, 55);

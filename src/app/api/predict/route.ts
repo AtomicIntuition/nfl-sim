@@ -178,18 +178,31 @@ export async function POST(request: NextRequest) {
     }
 
     // ---- Store prediction ----
-    const newPrediction = await db
-      .insert(predictions)
-      .values({
-        userId,
-        gameId,
-        predictedWinner,
-        predictedHomeScore,
-        predictedAwayScore,
-        pointsEarned: 0,
-        result: 'pending',
-      })
-      .returning();
+    let newPrediction;
+    try {
+      newPrediction = await db
+        .insert(predictions)
+        .values({
+          userId,
+          gameId,
+          predictedWinner,
+          predictedHomeScore,
+          predictedAwayScore,
+          pointsEarned: 0,
+          result: 'pending',
+        })
+        .returning();
+    } catch (insertError: unknown) {
+      // Handle unique constraint violation (concurrent duplicate submission)
+      const msg = insertError instanceof Error ? insertError.message : '';
+      if (msg.includes('unique') || msg.includes('duplicate') || msg.includes('predictions_user_game_idx')) {
+        return NextResponse.json(
+          { error: 'You have already made a prediction for this game. Only one prediction per game is allowed.' },
+          { status: 409 }
+        );
+      }
+      throw insertError;
+    }
 
     return NextResponse.json(
       {

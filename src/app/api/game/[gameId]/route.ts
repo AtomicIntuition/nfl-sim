@@ -105,8 +105,10 @@ export async function GET(
         specialTeamsRating: awayTeam.specialTeamsRating,
         playStyle: awayTeam.playStyle,
       },
-      homeScore: gameData.homeScore ?? 0,
-      awayScore: gameData.awayScore ?? 0,
+      // Hide final scores for broadcasting/simulating games to prevent spoilers.
+      // Live scores are only available client-side via the SSE event stream.
+      homeScore: gameData.status === 'completed' ? (gameData.homeScore ?? 0) : null,
+      awayScore: gameData.status === 'completed' ? (gameData.awayScore ?? 0) : null,
       boxScore: gameData.boxScore,
       totalPlays: gameData.totalPlays,
       serverSeedHash: gameData.serverSeedHash,

@@ -231,13 +231,19 @@ export function FieldVisual({
     } catch {}
   }, []);
 
-  // Update camera origin only during idle phase (invisible at scale 1)
+  // Update camera origin — tracks ball position across phases
   useEffect(() => {
-    if (!skyCamEnabled || playPhase !== 'idle') return;
-    // Lead 6% in offensive direction
+    if (!skyCamEnabled) return;
+    // Lead 6% in offensive direction during idle/pre_snap
     const offensiveLead = possession === 'home' ? -6 : 6;
-    const origin = Math.max(18, Math.min(82, ballLeft + offensiveLead));
-    setCameraOrigin(origin);
+    if (playPhase === 'idle' || playPhase === 'pre_snap') {
+      const origin = Math.max(18, Math.min(82, ballLeft + offensiveLead));
+      setCameraOrigin(origin);
+    } else if (playPhase === 'development' || playPhase === 'result') {
+      // Smoothly track ball position during play
+      const origin = Math.max(18, Math.min(82, ballLeft));
+      setCameraOrigin(origin);
+    }
   }, [skyCamEnabled, playPhase, ballLeft, possession]);
 
   // Toggle handler with camera cut flash
@@ -261,38 +267,46 @@ export function FieldVisual({
     const isLongKick = lastPlay?.type === 'kickoff' || lastPlay?.type === 'punt';
 
     let scale = 1;
-    let transition = 'transform 500ms ease-in-out';
+    let transition = 'transform 500ms ease-in-out, transform-origin 400ms ease-out';
 
     switch (playPhase) {
       case 'idle':
         scale = 1;
-        transition = 'transform 700ms ease-in-out';
+        transition = 'transform 700ms ease-in-out, transform-origin 400ms ease-out';
         break;
       case 'pre_snap':
-        if (isLongKick) scale = 1.15;
+        if (isLongKick) scale = 1.05;
         else if (isFieldGoalOrXP) scale = 1.4;
-        else if (isGoalLine) scale = 1.6;
-        else if (isRedZone) scale = 1.6;
-        else scale = 1.6;
-        transition = 'transform 450ms ease-out';
+        else if (isGoalLine) scale = 1.45;
+        else if (isRedZone) scale = 1.4;
+        else scale = 1.35;
+        transition = 'transform 600ms ease-out, transform-origin 400ms ease-out';
         break;
       case 'snap':
+        // Intermediate zoom — smoother transition from pre_snap to development
+        if (isLongKick) scale = 1.1;
+        else if (isFieldGoalOrXP) scale = 1.45;
+        else if (isGoalLine) scale = 1.6;
+        else if (isRedZone) scale = 1.5;
+        else scale = 1.45;
+        transition = 'transform 250ms ease-out, transform-origin 400ms ease-out';
+        break;
       case 'action':
       case 'result':
-        if (isLongKick) scale = 1.2;
+        if (isLongKick) scale = 1.15;
         else if (isFieldGoalOrXP) scale = 1.5;
-        else if (isGoalLine) scale = 2.2;
-        else if (isRedZone) scale = 2.1;
-        else scale = 1.9;
-        transition = 'transform 150ms ease-out';
+        else if (isGoalLine) scale = 1.8;
+        else if (isRedZone) scale = 1.6;
+        else scale = 1.55;
+        transition = 'transform 150ms ease-out, transform-origin 400ms ease-out';
         break;
       case 'post_play':
-        scale = 1.3;
-        transition = 'transform 500ms ease-in-out';
+        scale = 1.2;
+        transition = 'transform 500ms ease-in-out, transform-origin 400ms ease-out';
         break;
       default:
         scale = 1;
-        transition = 'transform 700ms ease-in-out';
+        transition = 'transform 700ms ease-in-out, transform-origin 400ms ease-out';
     }
 
     return { scale, transition };

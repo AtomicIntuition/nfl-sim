@@ -621,7 +621,10 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
 
     if (playCall === 'kickoff_normal' || playCall === 'kickoff') {
       const kicker = findPlayerByPosition(offensePlayers, 'K');
-      playResult = resolveKickoff(state, rng, kicker, weatherMods);
+      // Returner is from the receiving team (defense relative to kicking possession)
+      const returner = findPlayerByPosition(defensePlayers, 'RB') ??
+        findPlayerByPosition(defensePlayers, 'WR');
+      playResult = resolveKickoff(state, rng, kicker, weatherMods, returner);
     } else if (playCall === 'onside_kick') {
       const kicker = findPlayerByPosition(offensePlayers, 'K');
       playResult = resolveOnsideKick(state, rng, kicker);
@@ -707,7 +710,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
 
         // Intentional grounding in the end zone = safety (NFL Rule 8-2-1)
         // If the passer was in or very near the end zone when grounding occurred
-        if (penalty.type === 'intentional_grounding' && prevState.ballPosition <= 10) {
+        if (penalty.type === 'intentional_grounding' && prevState.ballPosition <= 2) {
           const defensiveTeam = flipPossession(state.possession);
           playResult.isSafety = true;
           playResult.isTouchdown = false;
@@ -824,9 +827,9 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
       state.patAttempt = false;
 
       if (playCall === 'onside_kick') {
-        // Onside kick: check if kicking team recovered
-        // The play description indicates recovery. We detect from isFirstDown flag.
-        if (playResult.isFirstDown) {
+        // Onside kick: check if kicking team recovered via dedicated flag
+        const onsideRecovered = (playResult as PlayResult & { onsideKickRecovered?: boolean }).onsideKickRecovered;
+        if (onsideRecovered) {
           // Kicking team recovers -- they keep possession
           state.ballPosition = playResult.yardsGained;
           state.down = 1;

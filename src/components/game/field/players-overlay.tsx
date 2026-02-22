@@ -570,12 +570,25 @@ export function PlayersOverlay({
       // ── Special teams ──
       if (playType === 'kickoff') {
         if (p.role === 'K') {
-          return { ...p, x: clamp(p.x - offDir * 8 * eased, 2, 98), role: p.role };
+          // Kicker run-up: approach ball with slight arc in first 15%, then drift forward
+          if (t < 0.15) {
+            const runT = t / 0.15;
+            const arcX = -offDir * 3 * easeOutCubic(runT); // approach ball
+            const arcY = Math.sin(runT * Math.PI) * 2; // slight lateral arc
+            return { ...p, x: clamp(p.x + arcX, 2, 98), y: clamp(p.y + arcY, 5, 95), role: p.role };
+          }
+          // After kick: kicker drifts forward slowly (follow-through)
+          const driftT = (t - 0.15) / 0.85;
+          return { ...p, x: clamp(p.x - offDir * 10 * easeOutCubic(driftT), 2, 98), role: p.role };
         }
+        // Coverage team — staggered starts per player, maintain lane discipline
+        const staggerDelay = (i % 5) * 0.03; // 0-12% delay per player
+        const adjustedT = Math.max(0, t - staggerDelay);
+        const covEased = easeOutCubic(adjustedT);
         return {
           ...p,
-          x: clamp(p.x - offDir * 35 * eased, 2, 98),
-          y: clamp(p.y + Math.sin(t * 4 + i * 0.7) * 3, 5, 95),
+          x: clamp(p.x - offDir * 40 * covEased, 2, 98),
+          y: clamp(p.y + Math.sin(adjustedT * 3 + i * 1.2) * 2, 5, 95), // slight discipline weave
           role: p.role,
         };
       }
@@ -730,19 +743,34 @@ export function PlayersOverlay({
       // ── Kickoff return ──
       if (playType === 'kickoff') {
         if (p.role === 'KR') {
-          if (t < 0.3) return p;
-          const returnT = (t - 0.3) / 0.7;
+          // KR waits for catch, then runs with 4-cut juke pattern
+          if (t < 0.28) return p;
+          const returnT = (t - 0.28) / 0.72;
           const ballX = lerp(fromX, toX, easeOutCubic(returnT));
+          const amplitude = 14 * (1 - returnT * 0.5); // decaying juke amplitude
           return {
             ...p,
             x: clamp(ballX + offDir * 5, 2, 98),
-            y: clamp(50 + Math.sin(returnT * Math.PI * 3) * 12, 5, 95),
+            y: clamp(50 + Math.sin(returnT * Math.PI * 4) * amplitude, 5, 95),
             role: p.role,
           };
         }
+        if (p.role === 'WDG') {
+          // Wedge blockers: form up ahead of returner, move as a unit
+          if (t < 0.28) return p;
+          const returnT = (t - 0.28) / 0.72;
+          const ballX = lerp(fromX, toX, easeOutCubic(returnT));
+          return {
+            ...p,
+            x: clamp(ballX + offDir * 10, 2, 98), // ahead of returner
+            y: clamp(p.y + (50 - p.y) * 0.3 * returnT, 5, 95), // converge toward center
+            role: p.role,
+          };
+        }
+        // Regular blockers: push toward coverage team
         return {
           ...p,
-          x: clamp(p.x + offDir * 18 * eased, 2, 98),
+          x: clamp(p.x + offDir * 20 * eased, 2, 98),
           y: clamp(p.y + (50 - p.y) * 0.35 * eased, 5, 95),
           role: p.role,
         };

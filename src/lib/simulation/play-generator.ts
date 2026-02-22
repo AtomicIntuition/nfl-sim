@@ -1079,11 +1079,16 @@ function resolvePassPlay(
       const defender = selectDefender(defensePlayers, rng);
       result.defender = defender;
 
-      let returnYards = rng.randomInt(0, 40);
+      // Estimate interception spot: ball was thrown toward receiver's area
+      // Use the offensive ball position as the approximate interception point
+      const intSpot = state.ballPosition;
+      // Distance the defender needs to cover to reach the opposing end zone
+      const distToEndZone = Math.max(1, intSpot);
+      let returnYards = rng.randomInt(0, Math.min(40, distToEndZone));
       const returnedForTD = rng.probability(PICK_SIX_RATE);
       if (returnedForTD) {
-        // Pick-six: return for the full distance
-        returnYards = rng.randomInt(30, 80);
+        // Pick-six: return for the full distance to the end zone
+        returnYards = distToEndZone;
       }
 
       result.turnover = {

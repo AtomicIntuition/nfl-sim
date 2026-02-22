@@ -92,12 +92,15 @@ export const MUFFED_PUNT_RATE = 0.02;
 // SPECIAL TEAMS
 // ============================================================================
 
-/** ~62% of kickoffs result in a touchback (post-2023 rule era) */
-export const TOUCHBACK_RATE = 0.62;
+/** ~40% of kickoffs result in a touchback (real NFL ~35-40%) */
+export const TOUCHBACK_RATE = 0.40;
 
 /** Average kickoff return distance in yards */
 export const KICKOFF_RETURN_MEAN = 23.0;
-export const KICKOFF_RETURN_STDDEV = 8.0;
+export const KICKOFF_RETURN_STDDEV = 12.0;
+
+/** Probability of a kickoff return touchdown on live returns (~0.5%) */
+export const KICKOFF_RETURN_TD_RATE = 0.005;
 
 /** Average punt distance in yards (gross) */
 export const PUNT_DISTANCE_MEAN = 45.0;

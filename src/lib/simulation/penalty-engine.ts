@@ -718,7 +718,7 @@ function calculateHalfDistanceIfNeeded(
     // If penalty would put ball at or past own goal line
     if (penaltyYards >= currentPosition) {
       // Half the distance to the goal
-      return Math.max(1, Math.floor(currentPosition / 2));
+      return Math.max(1, Math.round(currentPosition / 2));
     }
     return penaltyYards;
   } else {
@@ -726,7 +726,7 @@ function calculateHalfDistanceIfNeeded(
     const distanceToGoal = 100 - currentPosition;
     if (penaltyYards >= distanceToGoal) {
       // Half the distance to the goal - ball placed inside the 1
-      return Math.max(1, Math.floor(distanceToGoal / 2));
+      return Math.max(1, Math.round(distanceToGoal / 2));
     }
     return penaltyYards;
   }

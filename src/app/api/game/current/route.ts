@@ -117,8 +117,10 @@ export async function GET() {
         isFeatured: game.isFeatured,
         homeTeam: homeTeamRows[0] ?? null,
         awayTeam: awayTeamRows[0] ?? null,
-        homeScore: game.homeScore ?? 0,
-        awayScore: game.awayScore ?? 0,
+        // Hide final scores for broadcasting/simulating games to prevent spoilers.
+        // Live scores are only available client-side via the SSE event stream.
+        homeScore: game.status === 'completed' ? (game.homeScore ?? 0) : null,
+        awayScore: game.status === 'completed' ? (game.awayScore ?? 0) : null,
         scheduledAt: game.scheduledAt,
         broadcastStartedAt: game.broadcastStartedAt,
         completedAt: game.completedAt,

@@ -23,6 +23,21 @@ export const RESULT_MS = 800;
 export const POST_PLAY_MS = 300;
 const TOTAL_MS = PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS + RESULT_MS + POST_PLAY_MS;
 
+// ── Kickoff-specific timing ─────────────────────────────────
+const KICKOFF_PRE_SNAP_MS = 2000;
+const KICKOFF_SNAP_MS = 400;
+const KICKOFF_RESULT_MS = 800;
+const KICKOFF_POST_PLAY_MS = 300;
+
+/** Get the development phase duration for kickoffs based on play outcome */
+export function getKickoffDevMs(play: PlayResult | null): number {
+  if (!play || play.type !== 'kickoff') return DEVELOPMENT_MS;
+  if (play.yardsGained === 0) return 2500; // touchback — quick
+  if (play.isTouchdown) return 4500;       // TD return — dramatic
+  if (play.yardsGained >= 35) return 4000;  // big return
+  return 3500;                              // normal return
+}
+
 export type Phase = 'idle' | 'pre_snap' | 'snap' | 'development' | 'result' | 'post_play';
 
 // ── Easing ───────────────────────────────────────────────────
@@ -187,27 +202,36 @@ export function PlayScene({
     const toX = ballLeftPercent;
     fromToRef.current = { from: fromX, to: toX };
 
+    // Use kickoff-specific timing for kickoff plays
+    const isKickoffPlay = lastPlay.type === 'kickoff';
+    const preMs = isKickoffPlay ? KICKOFF_PRE_SNAP_MS : PRE_SNAP_MS;
+    const snapMs = isKickoffPlay ? KICKOFF_SNAP_MS : SNAP_MS;
+    const devMs = isKickoffPlay ? getKickoffDevMs(lastPlay) : DEVELOPMENT_MS;
+    const resMs = isKickoffPlay ? KICKOFF_RESULT_MS : RESULT_MS;
+    const postMs = isKickoffPlay ? KICKOFF_POST_PLAY_MS : POST_PLAY_MS;
+    const totalMs = preMs + snapMs + devMs + resMs + postMs;
+
     onAnimatingRef.current(true);
     updatePhase('pre_snap');
     setBallPos({ x: fromX, y: 50 });
     setAnimProgress(0);
 
-    const t1 = setTimeout(() => updatePhase('snap'), PRE_SNAP_MS);
+    const t1 = setTimeout(() => updatePhase('snap'), preMs);
     const t2 = setTimeout(() => {
       updatePhase('development');
-      startRaf(fromX, toX, lastPlay);
-    }, PRE_SNAP_MS + SNAP_MS);
+      startRaf(fromX, toX, lastPlay, devMs);
+    }, preMs + snapMs);
     const t3 = setTimeout(() => {
       updatePhase('result');
       cancelAnimationFrame(animFrameRef.current);
       setBallPos({ x: toX, y: 50 });
       setAnimProgress(1);
-    }, PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS);
-    const t4 = setTimeout(() => updatePhase('post_play'), PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS + RESULT_MS);
+    }, preMs + snapMs + devMs);
+    const t4 = setTimeout(() => updatePhase('post_play'), preMs + snapMs + devMs + resMs);
     const t5 = setTimeout(() => {
       updatePhase('idle');
       onAnimatingRef.current(false);
-    }, TOTAL_MS);
+    }, totalMs);
 
     return () => {
       clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
@@ -218,10 +242,10 @@ export function PlayScene({
   }, [playKey, lastPlay, prevBallLeftPercent, ballLeftPercent, updatePhase]);
 
   // ── RAF loop ───────────────────────────────────────────────
-  function startRaf(fromX: number, toX: number, play: PlayResult) {
+  function startRaf(fromX: number, toX: number, play: PlayResult, durationMs: number = DEVELOPMENT_MS) {
     const startTime = performance.now();
     function tick(now: number) {
-      const t = Math.min((now - startTime) / DEVELOPMENT_MS, 1);
+      const t = Math.min((now - startTime) / durationMs, 1);
       setAnimProgress(t);
       setBallPos(calculateBallPosition(play, fromX, toX, t, possession));
       if (t < 1) animFrameRef.current = requestAnimationFrame(tick);
@@ -857,40 +881,67 @@ function calculateKickoffPosition(
   // Direction based on actual ball travel, not offensive direction
   const kickDir = toX < fromX ? -1 : 1;
   const receiverEndZone = kickDir < 0 ? 8.33 : 91.66;
-  const landingX = fromX + (receiverEndZone - fromX) * 0.85;
+
+  // Use kickoffMeta for variable landing spot, or fallback to fixed 85%
+  const meta = play.kickoffMeta;
+  const catchSpotPct = meta ? (meta.catchSpot / 100) : 0.85;
+  const landingX = fromX + (receiverEndZone - fromX) * Math.min(catchSpotPct, 0.95);
+
+  // Arc height proportional to kick distance (not fixed)
+  const kickDist = Math.abs(landingX - fromX);
+  const arcHeight = Math.min(kickDist * 0.5, 30);
 
   if (isTouchback) {
     // Ball arcs fully into the end zone
     const eased = easeInOutQuad(t);
     const x = fromX + (receiverEndZone - fromX) * eased;
-    const arcHeight = 42;
     return { x, y: 50 - arcHeight * Math.sin(t * Math.PI) };
   }
 
-  const kickPhaseEnd = 0.32;
+  const kickPhaseEnd = 0.28; // Faster flight (was 0.32)
 
   if (t < kickPhaseEnd) {
     // Phase 1: Kick arc from kicker to landing spot
     const kickT = t / kickPhaseEnd;
     const eased = easeInOutQuad(kickT);
     const x = fromX + (landingX - fromX) * eased;
-    const arcHeight = 42;
     return { x, y: 50 - arcHeight * Math.sin(kickT * Math.PI) };
   }
 
   // Phase 2: Return run from landing spot back to final position
   const returnT = (t - kickPhaseEnd) / (1 - kickPhaseEnd);
+  const isTdReturn = play.isTouchdown;
+
+  if (isTdReturn) {
+    // TD return: 5 direction changes, break free at 60%, sprint to end zone
+    let x: number;
+    if (returnT < 0.6) {
+      // Juking phase — slower progress with sharp cuts
+      const jukeT = returnT / 0.6;
+      const eased = easeOutQuad(jukeT);
+      x = landingX + (toX - landingX) * 0.5 * eased;
+      const amplitude = 22 * (1 - jukeT * 0.3);
+      const cuts = Math.sin(jukeT * Math.PI * 5) * amplitude;
+      return { x, y: 50 + cuts };
+    }
+    // Breakaway sprint — fast, straight-ish run to end zone
+    const sprintT = (returnT - 0.6) / 0.4;
+    const midX = landingX + (toX - landingX) * 0.5;
+    x = midX + (toX - midX) * easeOutCubic(sprintT);
+    // Slight wobble that decays to nothing
+    const wobble = Math.sin(sprintT * Math.PI * 2) * 4 * (1 - sprintT);
+    return { x, y: 50 + wobble };
+  }
+
+  // Normal return: 3 cuts with a sharp juke at 40%, decaying amplitude
   const eased = easeOutQuad(returnT);
   const x = landingX + (toX - landingX) * eased;
-
-  // Lateral cuts during return
-  const isTdReturn = play.isTouchdown;
-  const numCuts = isTdReturn ? 4 : 3;
-  const amplitude = isTdReturn ? 22 : 16;
-  const decay = 1 - returnT * 0.4;
-  const cuts = Math.sin(returnT * Math.PI * numCuts) * amplitude * decay;
-
-  return { x, y: 50 + cuts };
+  const amplitude = 16 * (1 - returnT * 0.6);
+  const juke = returnT > 0.35 && returnT < 0.5
+    ? Math.sin((returnT - 0.35) * Math.PI / 0.15) * 8
+    : 0;
+  const cuts = Math.sin(returnT * Math.PI * 3) * amplitude;
+  return { x, y: 50 + cuts + juke };
 }
 
 // ── Punt Position (two-phase: arc + return) ──────────────────
@@ -1033,14 +1084,18 @@ function PlayTrajectory({
       const desc = (lastPlay.description || '').toLowerCase();
       const isFairCatch = desc.includes('fair catch');
       const isTouchback = lastPlay.yardsGained === 0 || desc.includes('touchback');
-      const kickPhaseEnd = isKickoff ? 0.32 : 0.45;
+      const kickPhaseEnd = isKickoff ? 0.28 : 0.45;
 
       // Calculate landing point using travel direction, not offDir
       let landingX: number;
       if (isKickoff) {
         const kickDir = toX < fromX ? -1 : 1;
         const receiverEndZone = kickDir < 0 ? 8.33 : 91.66;
-        landingX = isTouchback ? fromX + (receiverEndZone - fromX) * 0.9 : fromX + (receiverEndZone - fromX) * 0.85;
+        const meta = lastPlay.kickoffMeta;
+        const catchSpotPct = meta ? (meta.catchSpot / 100) : 0.85;
+        landingX = isTouchback
+          ? fromX + (receiverEndZone - fromX) * 0.9
+          : fromX + (receiverEndZone - fromX) * Math.min(catchSpotPct, 0.95);
       } else {
         const travelDist = toX - fromX;
         const overshoot = travelDist * 0.2;
@@ -1048,7 +1103,7 @@ function PlayTrajectory({
       }
 
       const dist = Math.abs(landingX - fromX);
-      const arcH = isKickoff ? 42 : Math.min(dist * 0.9, 38);
+      const arcH = isKickoff ? Math.min(dist * 0.5, 30) : Math.min(dist * 0.9, 38);
       const midX = (fromX + landingX) / 2;
 
       // Kick arc (dashed gold)

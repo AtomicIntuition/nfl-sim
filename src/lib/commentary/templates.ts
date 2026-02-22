@@ -333,15 +333,38 @@ const PUNT_TEMPLATES: TemplateCategory = {
 };
 
 // ---------------------------------------------------------------------------
-// KICKOFF
+// KICKOFF — tiered by return outcome
 // ---------------------------------------------------------------------------
 
-const KICKOFF_TEMPLATES: CommentaryTemplate[] = [
+const KICKOFF_TOUCHBACK_TEMPLATES: CommentaryTemplate[] = [
   { playByPlay: '{teamName} kicks it away. Into the end zone. Touchback.', colorAnalysis: "{defTeamName} will start at the 25.", crowdReaction: 'murmur' },
   { playByPlay: 'The kick is away from {teamName}! Touchback. Ball on the 25.', colorAnalysis: 'No reason to bring that one out. {defTeamName} ball.', crowdReaction: 'murmur' },
-  { playByPlay: '{teamName} kicks off. Received at the {yards}. Return to the {fieldPosition}.', colorAnalysis: 'Decent return for {defTeamName}. Got past the 25.', crowdReaction: 'murmur' },
   { playByPlay: 'And we are underway! {teamName} kicks it to the goal line, touchback.', colorAnalysis: 'Smart to take a knee. {defTeamName} starts from the 25.', crowdReaction: 'murmur' },
   { playByPlay: '{teamName} kicks it deep. Touchback.', colorAnalysis: "Standard start. Ball on the 25-yard line for {defTeamName}.", crowdReaction: 'murmur' },
+  { playByPlay: 'Big leg from the {teamName} kicker. Into the end zone. Touchback.', colorAnalysis: "Not much the return unit can do with that one.", crowdReaction: 'murmur' },
+];
+
+const KICKOFF_SHORT_RETURN_TEMPLATES: CommentaryTemplate[] = [
+  { playByPlay: '{teamName} kicks off. Brought down quickly at the {fieldPosition}.', colorAnalysis: '{defTeamName} barely got past the 20. Coverage was right there.', crowdReaction: 'murmur' },
+  { playByPlay: 'Kickoff received by {defTeamName}. Stopped at the {fieldPosition}. {yards}-yard return.', colorAnalysis: "Coverage unit swarmed him. That's what you want to see.", crowdReaction: 'murmur' },
+  { playByPlay: '{teamName} kicks it off. Short return, tackled at the {fieldPosition}.', colorAnalysis: '{defTeamName} will need to earn their field position on this drive.', crowdReaction: 'murmur' },
+];
+
+const KICKOFF_GOOD_RETURN_TEMPLATES: CommentaryTemplate[] = [
+  { playByPlay: '{teamName} kicks off. Return to the {fieldPosition}! {yards} yards!', colorAnalysis: 'Nice return! Found a seam in the coverage.', crowdReaction: 'cheer' },
+  { playByPlay: 'Kickoff return... the wedge opened up a lane! {yards} yards to the {fieldPosition}!', colorAnalysis: "Good blocking on that return for {defTeamName}. That's a quality start.", crowdReaction: 'cheer' },
+  { playByPlay: 'Kickoff received and returned {yards} yards to the {fieldPosition}.', colorAnalysis: '{defTeamName} gave their offense some room to work with.', crowdReaction: 'cheer' },
+];
+
+const KICKOFF_BIG_RETURN_TEMPLATES: CommentaryTemplate[] = [
+  { playByPlay: '{teamName} kicks off and the return man HAS ROOM! {yards} yards to the {fieldPosition}!', colorAnalysis: 'What a return! The coverage broke down and he made them PAY!', crowdReaction: 'roar' },
+  { playByPlay: 'Kickoff return! Breaking tackles! {yards} yards to the {fieldPosition}!', colorAnalysis: '{defTeamName} special teams just gave their offense a GIFT!', crowdReaction: 'roar' },
+  { playByPlay: 'WHAT A RETURN! {yards} yards all the way to the {fieldPosition}!', colorAnalysis: "He hit the gap and nobody could bring him down! {teamName}'s coverage is in trouble!", crowdReaction: 'roar' },
+];
+
+const KICKOFF_TD_RETURN_TEMPLATES: CommentaryTemplate[] = [
+  { playByPlay: '{teamName} kicks off... TAKES IT TO THE HOUSE!! KICKOFF RETURN TOUCHDOWN!!', colorAnalysis: 'NOBODY IS GOING TO CATCH HIM! {defTeamName} TAKES IT ALL THE WAY BACK!!', crowdReaction: 'roar' },
+  { playByPlay: 'Kickoff... HE BREAKS FREE!! GONE!! TOUCHDOWN!! KICKOFF RETURN TD!!', colorAnalysis: 'WHAT A PLAY! That is a BACKBREAKER for {teamName}! {defTeamName} answers IMMEDIATELY!', crowdReaction: 'roar' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -775,8 +798,17 @@ export function getTemplate(
     case 'punt':
       return pickRandom(PUNT_TEMPLATES[level], rng);
 
-    case 'kickoff':
-      return pickRandom(KICKOFF_TEMPLATES, rng);
+    case 'kickoff': {
+      // Tiered kickoff commentary based on return yards
+      if (play.isTouchdown && play.scoring) {
+        return pickRandom(KICKOFF_TD_RETURN_TEMPLATES, rng);
+      }
+      const koYards = play.yardsGained;
+      if (koYards === 0) return pickRandom(KICKOFF_TOUCHBACK_TEMPLATES, rng);
+      if (koYards < 20) return pickRandom(KICKOFF_SHORT_RETURN_TEMPLATES, rng);
+      if (koYards < 35) return pickRandom(KICKOFF_GOOD_RETURN_TEMPLATES, rng);
+      return pickRandom(KICKOFF_BIG_RETURN_TEMPLATES, rng);
+    }
 
     case 'extra_point':
       if (play.scoring) {
