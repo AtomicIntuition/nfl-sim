@@ -16,26 +16,26 @@ interface PlaySceneProps {
 }
 
 // ── Timing (exported for PlayersOverlay) ─────────────────────
-export const PRE_SNAP_MS = 1500;
-export const SNAP_MS = 400;
-export const DEVELOPMENT_MS = 3000;
-export const RESULT_MS = 800;
-export const POST_PLAY_MS = 300;
+export const PRE_SNAP_MS = 800;
+export const SNAP_MS = 250;
+export const DEVELOPMENT_MS = 2400;
+export const RESULT_MS = 600;
+export const POST_PLAY_MS = 200;
 const TOTAL_MS = PRE_SNAP_MS + SNAP_MS + DEVELOPMENT_MS + RESULT_MS + POST_PLAY_MS;
 
 // ── Kickoff-specific timing ─────────────────────────────────
-const KICKOFF_PRE_SNAP_MS = 2000;
-const KICKOFF_SNAP_MS = 400;
-const KICKOFF_RESULT_MS = 800;
-const KICKOFF_POST_PLAY_MS = 300;
+const KICKOFF_PRE_SNAP_MS = 1000;
+const KICKOFF_SNAP_MS = 250;
+const KICKOFF_RESULT_MS = 600;
+const KICKOFF_POST_PLAY_MS = 200;
 
 /** Get the development phase duration for kickoffs based on play outcome */
 export function getKickoffDevMs(play: PlayResult | null): number {
   if (!play || play.type !== 'kickoff') return DEVELOPMENT_MS;
-  if (play.yardsGained === 0) return 2500; // touchback — quick
-  if (play.isTouchdown) return 4500;       // TD return — dramatic
-  if (play.yardsGained >= 35) return 4000;  // big return
-  return 3500;                              // normal return
+  if (play.yardsGained === 0) return 2000; // touchback — quick
+  if (play.isTouchdown) return 3500;       // TD return — dramatic
+  if (play.yardsGained >= 35) return 3000;  // big return
+  return 2800;                              // normal return
 }
 
 export type Phase = 'idle' | 'pre_snap' | 'snap' | 'development' | 'result' | 'post_play';
@@ -362,18 +362,170 @@ export function PlayScene({
         const isKickoffFlight = playType === 'kickoff' && animProgress <= KICKOFF_PHASE_END;
         const isKickoffTouchback = playType === 'kickoff' && lastPlay.yardsGained === 0;
 
+        // During pass flight: 3D football with spiral and arc
+        if (isPass && phase === 'development') {
+          const isPlayAction = lastPlay.call === 'play_action_short' || lastPlay.call === 'play_action_deep';
+          const holdEnd = isPlayAction ? 0.42 : 0.32;
+          const throwEnd = 0.82;
+          const isInFlight = animProgress >= holdEnd && animProgress < throwEnd;
+          const isDeepPass = lastPlay.call === 'pass_deep' || lastPlay.call === 'play_action_deep' || lastPlay.yardsGained > 20;
+          const isIncomplete = playType === 'pass_incomplete';
+          const incompleteDropStart = 0.72;
+          const isPostDrop = isIncomplete && animProgress >= incompleteDropStart;
+
+          if (isInFlight || isPostDrop) {
+            // Flight phase: 3D spinning football
+            const flightDuration = isIncomplete ? (incompleteDropStart - holdEnd) : (throwEnd - holdEnd);
+            const flightT = isPostDrop
+              ? 1.0 // flight complete, now tumbling
+              : Math.min((animProgress - holdEnd) / flightDuration, 1);
+
+            // Ball size — deep passes are larger
+            const ballW = isDeepPass ? 36 : 30;
+            const ballH = isDeepPass ? 23 : 19;
+
+            // Spiral rotation
+            const spiralDeg = flightT * 720;
+
+            // Perspective scale: ball grows as it arcs high, shrinks as it arrives
+            const peakScale = isDeepPass ? 1.6 : 1.4;
+            const arcT = Math.sin(flightT * Math.PI); // 0→1→0 parabolic
+            const perspScale = isPostDrop
+              ? 1.0 - ((animProgress - incompleteDropStart) / (1 - incompleteDropStart)) * 0.4
+              : 1.0 + (peakScale - 1.0) * arcT;
+
+            // Drop shadow: shrinks at peak (ball high up), grows at landing
+            const shadowScale = isPostDrop ? 0.8 : 0.3 + 0.7 * (1 - arcT);
+            const shadowDist = isPostDrop
+              ? 12 + ((animProgress - incompleteDropStart) / (1 - incompleteDropStart)) * 15
+              : 15 + arcT * 10;
+
+            // Tumble for incomplete passes after drop
+            const tumbleX = isPostDrop
+              ? ((animProgress - incompleteDropStart) / (1 - incompleteDropStart)) * 540
+              : 0;
+            const tumbleOpacity = isPostDrop
+              ? 1 - ((animProgress - incompleteDropStart) / (1 - incompleteDropStart)) * 0.7
+              : 1;
+
+            return (
+              <div
+                className="absolute"
+                style={{
+                  left: `${clamp(ballPos.x, 2, 98)}%`,
+                  top: `${clamp(ballPos.y, 5, 95)}%`,
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 8,
+                  perspective: '200px',
+                }}
+              >
+                {/* Drop shadow below ball */}
+                <div
+                  className="absolute rounded-full"
+                  style={{
+                    width: 24 * shadowScale,
+                    height: 8 * shadowScale,
+                    left: '50%',
+                    top: `${shadowDist}px`,
+                    transform: 'translateX(-50%)',
+                    background: 'radial-gradient(ellipse, rgba(0,0,0,0.5) 0%, transparent 70%)',
+                    opacity: 0.4,
+                  }}
+                />
+                {/* 3D Football */}
+                <div
+                  style={{
+                    width: ballW,
+                    height: ballH,
+                    transformStyle: 'preserve-3d',
+                    transform: `scale(${perspScale}) rotateY(${spiralDeg}deg) rotateX(${15 + tumbleX}deg)`,
+                    opacity: tumbleOpacity,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #C4703C 0%, #A0522D 30%, #8B4513 60%, #6B3410 100%)',
+                      border: '1.5px solid #5C2D06',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.2), 0 0 10px rgba(255,255,255,0.2)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* Laces */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '30%',
+                        width: '40%',
+                        height: '2px',
+                        background: 'rgba(255,255,255,0.7)',
+                        transform: 'translateY(-50%)',
+                        borderRadius: '1px',
+                      }}
+                    />
+                    {[0, 1, 2, 3].map(i => (
+                      <div
+                        key={i}
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(50% - 4px)',
+                          left: `${33 + i * 9}%`,
+                          width: '1.5px',
+                          height: '8px',
+                          background: 'rgba(255,255,255,0.6)',
+                          borderRadius: '1px',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // Before throw (dropback/hold) or after catch (RAC): small flat oval
+          const isRAC = playType === 'pass_complete' && animProgress >= throwEnd;
+          return (
+            <div
+              className="absolute"
+              style={{
+                left: `${clamp(ballPos.x, 2, 98)}%`,
+                top: `${clamp(ballPos.y, 5, 95)}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 6,
+                opacity: isRAC ? 0.4 : 1,
+              }}
+            >
+              <div
+                style={{
+                  width: 14,
+                  height: 9,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
+                  border: '1px solid #5C2D06',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                }}
+              />
+            </div>
+          );
+        }
+
         // During kickoff flight phase: large 3D football with spiral
         if (isKickoffFlight || (isKickoffTouchback && phase === 'development')) {
           const flightProgress = isKickoffTouchback ? animProgress : animProgress / KICKOFF_PHASE_END;
-          // Scale: starts large (coming at viewer), shrinks as it lands
-          const scale = 2.0 - flightProgress * 1.0;
+          // Scale: starts elevated (coming at viewer), shrinks as it lands
+          const scale = 1.5 - flightProgress * 0.7;
           // Shadow grows as ball descends (simulates altitude)
           const shadowScale = 0.3 + flightProgress * 0.7;
           const shadowOpacity = 0.15 + flightProgress * 0.35;
           // Spiral animation progress
           const spiralDeg = flightProgress * 1080;
-          // Opacity: fade in quickly
-          const opacity = Math.min(1, flightProgress * 4);
+          // Opacity: start visible, reach full quickly
+          const opacity = Math.min(1, 0.7 + flightProgress * 3);
 
           return (
             <div
@@ -414,9 +566,9 @@ export function PlayScene({
                     width: '100%',
                     height: '100%',
                     borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 40%, #6B3410 100%)',
+                    background: 'linear-gradient(135deg, #C4703C 0%, #A0522D 30%, #8B4513 60%, #6B3410 100%)',
                     border: '1.5px solid #5C2D06',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.15)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.2), 0 0 12px rgba(255,255,255,0.3)',
                     position: 'relative',
                     overflow: 'hidden',
                   }}
@@ -496,8 +648,7 @@ export function PlayScene({
           );
         }
 
-        // Spin football on passes; reduce opacity on runs (carrier logo is the main visual)
-        const spinDeg = isPass ? animProgress * 720 : 0;
+        // Reduce opacity on runs (carrier logo is the main visual)
         const ballOpacity = isRun ? 0.5 : 1;
         return (
           <div
@@ -518,7 +669,7 @@ export function PlayScene({
                 background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
                 border: '1px solid #5C2D06',
                 boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                transform: `rotate(${spinDeg}deg)`,
+                transform: 'none',
               }}
             />
           </div>

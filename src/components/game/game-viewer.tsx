@@ -76,7 +76,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
     if (broadcasterTimerRef.current) clearTimeout(broadcasterTimerRef.current);
     broadcasterTimerRef.current = setTimeout(() => {
       speakPlay(currentEvent);
-    }, 1900);
+    }, 1100);
     return () => {
       if (broadcasterTimerRef.current) clearTimeout(broadcasterTimerRef.current);
     };
@@ -177,7 +177,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
       return;
     }
 
-    // Clear immediately, then reveal after 1900ms (during DEVELOPMENT phase)
+    // Clear immediately, then reveal after 1100ms (during DEVELOPMENT phase)
     setDelayedCommentary(null);
     const timer = setTimeout(() => {
       setDelayedCommentary({
@@ -185,7 +185,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
         crowdReaction: currentEvent.commentary.crowdReaction,
         excitement: currentEvent.commentary.excitement,
       });
-    }, 1900);
+    }, 1100);
     return () => clearTimeout(timer);
   }, [currentEvent?.eventNumber]); // eslint-disable-line react-hooks/exhaustive-deps
 

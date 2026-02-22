@@ -306,27 +306,27 @@ function getPlaybackDelay(event: GameEvent): number {
   const { playResult, commentary } = event;
 
   // Touchdowns and turnovers deserve the most dramatic pause
-  if (playResult.isTouchdown) return 3500;
-  if (playResult.turnover) return 3000;
+  if (playResult.isTouchdown) return 2500;
+  if (playResult.turnover) return 2200;
 
   // Scoring plays
-  if (playResult.scoring) return 2500;
+  if (playResult.scoring) return 1800;
 
   // Big plays (15+ yards)
-  if (playResult.yardsGained >= 15) return 2000;
+  if (playResult.yardsGained >= 15) return 1400;
 
   // Sacks and penalties
-  if (playResult.type === 'sack') return 1800;
-  if (playResult.penalty && !playResult.penalty.declined) return 1800;
+  if (playResult.type === 'sack') return 1200;
+  if (playResult.penalty && !playResult.penalty.declined) return 1200;
 
   // High excitement commentary
-  if (commentary.excitement > 70) return 2000;
+  if (commentary.excitement > 70) return 1400;
 
   // Kickoffs get extra time for intro overlay and dramatic ball flight
-  if (playResult.type === 'kickoff') return 2500;
+  if (playResult.type === 'kickoff') return 1800;
   // Punts
-  if (playResult.type === 'punt') return 1500;
+  if (playResult.type === 'punt') return 1000;
 
   // Normal plays
-  return 1200;
+  return 800;
 }

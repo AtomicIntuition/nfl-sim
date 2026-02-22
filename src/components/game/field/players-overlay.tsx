@@ -903,7 +903,7 @@ export function PlayersOverlay({
   // Use CSS transitions for non-RAF phases
   // Pre-snap: 900ms transition → smooth formation set with stagger feel
   const useTransition = phase === 'pre_snap' || phase === 'snap' || phase === 'post_play' || phase === 'idle';
-  const transMs = phase === 'pre_snap' ? 900 : phase === 'snap' ? 300 : 400;
+  const transMs = phase === 'pre_snap' ? 500 : phase === 'snap' ? 300 : 250;
   const transitionStyle = useTransition ? `left ${transMs}ms ease-out, top ${transMs}ms ease-out` : 'none';
 
   const logoUrl = teamAbbreviation ? getTeamLogoUrl(teamAbbreviation) : null;
