@@ -5,7 +5,7 @@ import type { GameEvent } from '@/lib/simulation/types';
 
 /**
  * Web Speech API broadcaster narration.
- * Only speaks plays with excitement >= 50 to avoid narrating every mundane play.
+ * Speaks every play except pregame/coin_toss events.
  * Cancels previous utterance before speaking a new one.
  */
 export function useBroadcasterAudio() {
@@ -40,7 +40,10 @@ export function useBroadcasterAudio() {
     (event: GameEvent) => {
       if (isMuted || !synthRef.current) return;
       if (event.eventNumber === lastSpokenRef.current) return;
-      if (event.commentary.excitement < 50) return;
+
+      // Skip non-play events (pregame intro, coin toss)
+      const skipTypes = ['pregame', 'coin_toss'];
+      if (skipTypes.includes(event.playResult.type)) return;
 
       // Cancel any ongoing speech
       synthRef.current.cancel();
@@ -48,8 +51,12 @@ export function useBroadcasterAudio() {
       const text = event.commentary.playByPlay;
       if (!text) return;
 
+      // Vary rate by excitement — bigger plays get a more energetic delivery
+      const excitement = event.commentary.excitement;
+      const rate = excitement >= 70 ? 1.2 : excitement >= 40 ? 1.1 : 1.0;
+
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.1;
+      utterance.rate = rate;
       utterance.pitch = 0.85;
       if (voiceRef.current) utterance.voice = voiceRef.current;
 
