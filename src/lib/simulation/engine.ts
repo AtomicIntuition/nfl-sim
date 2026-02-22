@@ -28,6 +28,8 @@ import type {
   CrowdReaction,
   PlayerGameStats,
   PlayCommentary,
+  WeatherConditions,
+  WeatherType,
 } from './types';
 
 // --- RNG ---
@@ -267,6 +269,142 @@ function calculatePlayDelay(
 }
 
 // ============================================================================
+// WEATHER SYSTEM
+// ============================================================================
+
+/** Modifiers applied to gameplay based on weather conditions. */
+export interface WeatherModifiers {
+  completionMod: number;    // multiplied onto completionRate
+  fumbleMod: number;        // multiplied onto FUMBLE_RATE checks
+  sackMod: number;          // multiplied onto adjustedSackRate
+  fieldGoalMod: number;     // multiplied onto FG accuracy
+  runYardMod: number;       // added to run yard mean
+  puntDistanceMod: number;  // added to punt distance
+}
+
+/**
+ * Generate deterministic weather conditions for a game.
+ * Uses the seeded RNG so the same seeds always produce the same weather.
+ */
+function generateWeather(rng: { random(): number; gaussian(mean: number, stdDev: number, min?: number, max?: number): number; randomFloat(min: number, max: number): number; weightedChoice<T>(options: { value: T; weight: number }[]): T }): WeatherConditions {
+  // Pick weather type with weighted distribution
+  let type = rng.weightedChoice<WeatherType>([
+    { value: 'clear',  weight: 40 },
+    { value: 'cloudy', weight: 25 },
+    { value: 'rain',   weight: 15 },
+    { value: 'snow',   weight: 8 },
+    { value: 'fog',    weight: 5 },
+    { value: 'wind',   weight: 7 },
+  ]);
+
+  // Temperature
+  let temperature = Math.round(rng.gaussian(65, 15, 10, 95));
+  if (type === 'snow') {
+    temperature = Math.min(temperature, 32);
+  }
+  if (type === 'rain' && temperature < 33) {
+    type = 'snow'; // cold rain becomes snow
+    temperature = Math.min(temperature, 32);
+  }
+
+  // Wind speed
+  let windSpeed = Math.round(rng.gaussian(8, 6, 0, 35));
+  if (type === 'wind') {
+    windSpeed = Math.max(20, windSpeed);
+  }
+
+  // Precipitation
+  let precipitation = 0;
+  if (type === 'rain' || type === 'snow') {
+    precipitation = Math.round(rng.randomFloat(0.2, 1.0) * 100) / 100;
+  }
+
+  // Build description
+  let desc: string;
+  const windDesc = windSpeed >= 20 ? `winds ${windSpeed} mph` : windSpeed >= 8 ? `winds ${windSpeed} mph` : 'calm winds';
+
+  switch (type) {
+    case 'clear':
+      desc = `Clear skies, ${temperature}°F, ${windDesc}`;
+      break;
+    case 'cloudy':
+      desc = `Overcast, ${temperature}°F, ${windDesc}`;
+      break;
+    case 'rain': {
+      const intensity = precipitation > 0.5 ? 'Heavy rain' : 'Light rain';
+      desc = `${intensity}, ${temperature}°F, ${windDesc}`;
+      break;
+    }
+    case 'snow': {
+      const intensity = precipitation > 0.5 ? 'Heavy snow' : 'Light snow';
+      desc = `${intensity}, ${temperature}°F, ${windDesc}`;
+      break;
+    }
+    case 'fog':
+      desc = `Dense fog, ${temperature}°F, ${windDesc}`;
+      break;
+    case 'wind':
+      desc = `Strong winds ${windSpeed} mph, ${temperature}°F`;
+      break;
+  }
+
+  return { type, temperature, windSpeed, precipitation, description: desc };
+}
+
+/**
+ * Compute gameplay modifiers based on weather conditions.
+ * Clear and cloudy have no effect; rain/snow/fog/wind degrade outcomes.
+ */
+function getWeatherModifiers(weather: WeatherConditions): WeatherModifiers {
+  let mods: WeatherModifiers = {
+    completionMod: 1.0,
+    fumbleMod: 1.0,
+    sackMod: 1.0,
+    fieldGoalMod: 1.0,
+    runYardMod: 0,
+    puntDistanceMod: 0,
+  };
+
+  switch (weather.type) {
+    case 'rain': {
+      const heavy = weather.precipitation > 0.5;
+      mods = heavy
+        ? { completionMod: 0.88, fumbleMod: 1.40, sackMod: 1.10, fieldGoalMod: 0.85, runYardMod: -0.5, puntDistanceMod: -5 }
+        : { completionMod: 0.94, fumbleMod: 1.20, sackMod: 1.05, fieldGoalMod: 0.92, runYardMod: -0.3, puntDistanceMod: -3 };
+      break;
+    }
+    case 'snow': {
+      const heavy = weather.precipitation > 0.5;
+      mods = heavy
+        ? { completionMod: 0.82, fumbleMod: 1.50, sackMod: 1.15, fieldGoalMod: 0.75, runYardMod: -1.0, puntDistanceMod: -8 }
+        : { completionMod: 0.90, fumbleMod: 1.30, sackMod: 1.08, fieldGoalMod: 0.88, runYardMod: -0.5, puntDistanceMod: -4 };
+      break;
+    }
+    case 'fog':
+      mods = { completionMod: 0.93, fumbleMod: 1.05, sackMod: 1.00, fieldGoalMod: 0.95, runYardMod: 0, puntDistanceMod: 0 };
+      break;
+    case 'wind': {
+      const strong = weather.windSpeed > 25;
+      mods = strong
+        ? { completionMod: 0.85, fumbleMod: 1.10, sackMod: 1.00, fieldGoalMod: 0.78, runYardMod: 0, puntDistanceMod: -10 }
+        : { completionMod: 0.92, fumbleMod: 1.05, sackMod: 1.00, fieldGoalMod: 0.88, runYardMod: 0, puntDistanceMod: -5 };
+      break;
+    }
+    default:
+      // clear / cloudy: no modifiers
+      break;
+  }
+
+  // Cold weather bonus (<32°F): additional fumble and completion penalty
+  if (weather.temperature < 32) {
+    mods.fumbleMod *= 1.10;
+    mods.completionMod *= 0.97;
+  }
+
+  return mods;
+}
+
+// ============================================================================
 // MAIN SIMULATION FUNCTION
 // ============================================================================
 
@@ -286,6 +424,12 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
   const serverSeedHash = hashServerSeed(serverSeed);
   const rng = createSeededRNG(serverSeed, clientSeed);
   const gameId = generateGameId(serverSeed, clientSeed);
+
+  // ========================================================================
+  // 1b. GENERATE WEATHER
+  // ========================================================================
+  const weather = generateWeather(rng);
+  const weatherMods = getWeatherModifiers(weather);
 
   // ========================================================================
   // 2. INITIALIZE GAME STATE
@@ -312,6 +456,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
     isHalftime: false,
     kickoff: true,
     patAttempt: false,
+    weather,
   };
 
   // ========================================================================
@@ -365,7 +510,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
     },
     commentary: {
       playByPlay: `Welcome to ${config.homeTeam.city}! The ${config.awayTeam.name} visit the ${config.homeTeam.name}.`,
-      colorAnalysis: `It's a beautiful day for football. Both teams are ready to compete.`,
+      colorAnalysis: `${weather.description}. Both teams are ready to compete.`,
       crowdReaction: 'cheer',
       excitement: 40,
     },
@@ -476,16 +621,16 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
 
     if (playCall === 'kickoff_normal' || playCall === 'kickoff') {
       const kicker = findPlayerByPosition(offensePlayers, 'K');
-      playResult = resolveKickoff(state, rng, kicker);
+      playResult = resolveKickoff(state, rng, kicker, weatherMods);
     } else if (playCall === 'onside_kick') {
       const kicker = findPlayerByPosition(offensePlayers, 'K');
       playResult = resolveOnsideKick(state, rng, kicker);
     } else if (playCall === 'punt') {
       const punter = findPlayerByPosition(offensePlayers, 'P');
-      playResult = resolvePunt(state, rng, punter);
+      playResult = resolvePunt(state, rng, punter, weatherMods);
     } else if (playCall === 'field_goal') {
       const kicker = findPlayerByPosition(offensePlayers, 'K');
-      playResult = resolveFieldGoal(state, rng, kicker);
+      playResult = resolveFieldGoal(state, rng, kicker, weatherMods);
     } else if (playCall === 'extra_point') {
       const kicker = findPlayerByPosition(offensePlayers, 'K');
       playResult = resolveExtraPoint(state, rng, kicker);
@@ -503,6 +648,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
         formation,
         defensiveCall,
         routeConcept,
+        weatherMods,
       );
 
       // Attach formation & defense data to PlayResult for UI rendering
@@ -1311,6 +1457,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
     mvp,
     boxScore,
     drives: allDrives,
+    weather,
   };
 
   return simulatedGame;

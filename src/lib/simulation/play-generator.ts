@@ -54,6 +54,7 @@ import {
 import { getFormationModifiers } from './formations';
 import { getDefensiveModifiers } from './defensive-coordinator';
 import { getRouteConceptModifiers } from './route-concepts';
+import type { WeatherModifiers } from './engine';
 
 // ============================================================================
 // Extended Yard Distributions for New Play Types
@@ -386,6 +387,7 @@ function resolveRunPlay(
   momentum: number,
   formation?: Formation,
   defensiveCall?: DefensiveCall,
+  weatherMods?: WeatherModifiers,
 ): PlayResult {
   const result = baseResult(call);
   result.type = 'run';
@@ -462,6 +464,13 @@ function resolveRunPlay(
   }
 
   // --------------------------------------------------------------------------
+  // Weather modifiers on run yards
+  // --------------------------------------------------------------------------
+  if (weatherMods) {
+    yards += weatherMods.runYardMod;
+  }
+
+  // --------------------------------------------------------------------------
   // Draw play special logic: bonus vs blitzing defense
   // --------------------------------------------------------------------------
   if (call === 'run_draw' && defensiveCall && defensiveCall.blitz !== 'none') {
@@ -533,8 +542,9 @@ function resolveRunPlay(
     }
   }
 
-  // Fumble check (slightly elevated on run plays)
-  if (!result.isTouchdown && !result.isSafety && rng.probability(FUMBLE_RATE * 1.1)) {
+  // Fumble check (slightly elevated on run plays, weather increases fumble risk)
+  const runFumbleRate = FUMBLE_RATE * 1.1 * (weatherMods?.fumbleMod ?? 1);
+  if (!result.isTouchdown && !result.isSafety && rng.probability(runFumbleRate)) {
     const defenseRecovers = rng.probability(FUMBLE_RECOVERY_DEFENSE);
     if (defenseRecovers) {
       const defender = selectDefender(defensePlayers, rng);
@@ -609,6 +619,7 @@ function resolvePassPlay(
   formation?: Formation,
   defensiveCall?: DefensiveCall,
   routeConcept?: RouteConcept,
+  weatherMods?: WeatherModifiers,
 ): PlayResult {
   const result = baseResult(call);
 
@@ -624,7 +635,7 @@ function resolvePassPlay(
   if (call === 'pass_rpo') {
     if (rng.probability(0.40)) {
       // QB keeps and runs (treat as scramble with option-runner yards)
-      return resolveScramble(call, state, passer, offensePlayers, defensePlayers, rng, momentum);
+      return resolveScramble(call, state, passer, offensePlayers, defensePlayers, rng, momentum, weatherMods);
     }
     // Otherwise: quick pass (use pass_quick completion logic below, but with RPO yards)
   }
@@ -638,7 +649,7 @@ function resolvePassPlay(
     scrambleRate *= fmods.scrambleMultiplier;
   }
   if (rng.probability(scrambleRate)) {
-    return resolveScramble(call, state, passer, offensePlayers, defensePlayers, rng, momentum);
+    return resolveScramble(call, state, passer, offensePlayers, defensePlayers, rng, momentum, weatherMods);
   }
 
   // --------------------------------------------------------------------------
@@ -666,6 +677,11 @@ function resolvePassPlay(
   if (defensiveCall) {
     const dmods = getDefensiveModifiers(defensiveCall);
     adjustedSackRate *= dmods.sackRateMultiplier;
+  }
+
+  // Weather modifiers on sack rate (slippery footing)
+  if (weatherMods) {
+    adjustedSackRate *= weatherMods.sackMod;
   }
 
   // Clamp after all modifiers
@@ -706,8 +722,8 @@ function resolvePassPlay(
         `${formatName(passer)} sacked by ${defName} for a loss of ${Math.abs(sackYards)} yards to the ${posStr}`;
     }
 
-    // Fumble on sack: 9% chance
-    if (!result.isSafety && rng.probability(0.09)) {
+    // Fumble on sack: 9% chance (weather increases risk)
+    if (!result.isSafety && rng.probability(0.09 * (weatherMods?.fumbleMod ?? 1))) {
       const defenseRecovers = rng.probability(FUMBLE_RECOVERY_DEFENSE);
       if (defenseRecovers) {
         let returnYards = rng.randomInt(0, 25);
@@ -899,6 +915,13 @@ function resolvePassPlay(
   }
 
   // --------------------------------------------------------------------------
+  // Weather modifiers on completion rate
+  // --------------------------------------------------------------------------
+  if (weatherMods) {
+    completionRate *= weatherMods.completionMod;
+  }
+
+  // --------------------------------------------------------------------------
   // Clamp completion rate between reasonable bounds
   // --------------------------------------------------------------------------
   completionRate = Math.max(0.15, Math.min(0.95, completionRate));
@@ -984,8 +1007,8 @@ function resolvePassPlay(
       }
     }
 
-    // Fumble after catch
-    if (!result.isTouchdown && rng.probability(FUMBLE_RATE * 0.8)) {
+    // Fumble after catch (weather increases risk)
+    if (!result.isTouchdown && rng.probability(FUMBLE_RATE * 0.8 * (weatherMods?.fumbleMod ?? 1))) {
       const defenseRecovers = rng.probability(FUMBLE_RECOVERY_DEFENSE);
       if (defenseRecovers) {
         const defender = selectDefender(defensePlayers, rng);
@@ -1123,6 +1146,7 @@ function resolveScramble(
   defensePlayers: Player[],
   rng: SeededRNG,
   momentum: number,
+  weatherMods?: WeatherModifiers,
 ): PlayResult {
   const result = baseResult(call);
   result.type = 'scramble';
@@ -1189,8 +1213,8 @@ function resolveScramble(
     result.isFirstDown = result.yardsGained >= state.yardsToGo;
   }
 
-  // Fumble check on scramble
-  if (!result.isTouchdown && !result.isSafety && rng.probability(FUMBLE_RATE * 1.3)) {
+  // Fumble check on scramble (weather increases risk)
+  if (!result.isTouchdown && !result.isSafety && rng.probability(FUMBLE_RATE * 1.3 * (weatherMods?.fumbleMod ?? 1))) {
     const defenseRecovers = rng.probability(FUMBLE_RECOVERY_DEFENSE);
     if (defenseRecovers) {
       const defender = selectDefender(defensePlayers, rng);
@@ -1583,6 +1607,7 @@ export function resolvePlay(
   formation?: Formation,
   defensiveCall?: DefensiveCall,
   routeConcept?: RouteConcept,
+  weatherMods?: WeatherModifiers,
 ): PlayResult {
   switch (call) {
     // ---- Run plays ----
@@ -1596,7 +1621,7 @@ export function resolvePlay(
     case 'run_sweep':
     case 'run_qb_sneak':
     case 'run_option':
-      return resolveRunPlay(call, state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall);
+      return resolveRunPlay(call, state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall, weatherMods);
 
     // ---- Pass plays ----
     case 'pass_quick':
@@ -1607,7 +1632,7 @@ export function resolvePlay(
     case 'play_action_short':
     case 'play_action_deep':
     case 'pass_rpo':
-      return resolvePassPlay(call, state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall, routeConcept);
+      return resolvePassPlay(call, state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall, routeConcept, weatherMods);
 
     // ---- Special teams ----
     case 'punt':
@@ -1640,7 +1665,7 @@ export function resolvePlay(
     default: {
       // Fallback: treat unknown calls as a run play
       const _exhaustiveCheck: never = call;
-      return resolveRunPlay('run_inside', state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall);
+      return resolveRunPlay('run_inside', state, offensePlayers, defensePlayers, rng, momentum, formation, defensiveCall, weatherMods);
     }
   }
 }

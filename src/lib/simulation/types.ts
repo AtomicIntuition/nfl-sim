@@ -134,6 +134,28 @@ export interface GameState {
   kickoff: boolean;
   /** True when the next play is a PAT or two-point conversion attempt. */
   patAttempt: boolean;
+  /** Weather conditions for this game (optional for backwards compatibility with existing DB events). */
+  weather?: WeatherConditions;
+}
+
+// ============================================================
+// WEATHER TYPES
+// ============================================================
+
+/** Weather condition categories. */
+export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'snow' | 'fog' | 'wind';
+
+/** Game weather conditions, generated deterministically per game. */
+export interface WeatherConditions {
+  type: WeatherType;
+  /** Temperature in Fahrenheit. Range: 10-95. */
+  temperature: number;
+  /** Wind speed in mph. Range: 0-35. */
+  windSpeed: number;
+  /** Precipitation intensity 0-1 (0=none, 1=heavy). Only >0 for rain/snow. */
+  precipitation: number;
+  /** Human-readable description, e.g. "Heavy snow, 22°F, winds 25 mph". */
+  description: string;
 }
 
 // ============================================================
@@ -658,6 +680,8 @@ export interface SimulatedGame {
   mvp: PlayerGameStats;
   boxScore: BoxScore;
   drives: Drive[];
+  /** Weather conditions for this game. */
+  weather: WeatherConditions;
 }
 
 // ============================================================

@@ -15,6 +15,7 @@ import {
   Player,
   SeededRNG,
 } from './types';
+import type { WeatherModifiers } from './engine';
 import * as C from './constants';
 
 // ============================================================================
@@ -83,7 +84,8 @@ function clamp(value: number, min: number, max: number): number {
 export function resolveKickoff(
   state: GameState,
   rng: SeededRNG,
-  kicker: Player | null
+  kicker: Player | null,
+  weatherMods?: WeatherModifiers,
 ): PlayResult {
   const result = basePlayResult('kickoff', 'kickoff_normal');
   const name = kickerName(kicker);
@@ -95,8 +97,11 @@ export function resolveKickoff(
   );
   result.isClockStopped = true;
 
-  // Touchback check
-  if (rng.probability(C.TOUCHBACK_RATE)) {
+  // Touchback check (wind reduces touchback rate)
+  const touchbackRate = weatherMods && weatherMods.puntDistanceMod < -3
+    ? C.TOUCHBACK_RATE * 0.90
+    : C.TOUCHBACK_RATE;
+  if (rng.probability(touchbackRate)) {
     result.type = 'touchback';
     result.yardsGained = 0;
     result.description =
@@ -218,7 +223,8 @@ export function resolveOnsideKick(
 export function resolvePunt(
   state: GameState,
   rng: SeededRNG,
-  punter: Player | null
+  punter: Player | null,
+  weatherMods?: WeatherModifiers,
 ): PlayResult {
   const result = basePlayResult('punt', 'punt');
   const name = punter ? punter.name : 'the punter';
@@ -229,9 +235,10 @@ export function resolvePunt(
   );
   result.isClockStopped = true;
 
-  // Calculate punt distance
+  // Calculate punt distance (weather affects distance)
+  const puntMean = C.PUNT_DISTANCE_MEAN + (weatherMods?.puntDistanceMod ?? 0);
   const puntDistance = Math.round(
-    rng.gaussian(C.PUNT_DISTANCE_MEAN, C.PUNT_DISTANCE_STDDEV, 25, 65)
+    rng.gaussian(puntMean, C.PUNT_DISTANCE_STDDEV, 25, 65)
   );
 
   // Where the ball lands from the receiving team's perspective:
@@ -331,7 +338,8 @@ export function fieldGoalDistance(ballPosition: number): number {
 export function resolveFieldGoal(
   state: GameState,
   rng: SeededRNG,
-  kicker: Player | null
+  kicker: Player | null,
+  weatherMods?: WeatherModifiers,
 ): PlayResult {
   const result = basePlayResult('field_goal', 'field_goal');
   const name = kickerName(kicker);
@@ -350,6 +358,12 @@ export function resolveFieldGoal(
   if (kicker) {
     const ratingBonus = (kicker.rating - 80) * 0.002; // +/-0.04 max for elite/poor kickers
     accuracy = clamp(accuracy + ratingBonus, 0, 1);
+  }
+
+  // Weather modifier on FG accuracy (wind, rain, snow reduce accuracy)
+  if (weatherMods) {
+    accuracy *= weatherMods.fieldGoalMod;
+    accuracy = clamp(accuracy, 0, 1);
   }
 
   const isMade = rng.probability(accuracy);

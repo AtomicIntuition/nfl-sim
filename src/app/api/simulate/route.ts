@@ -603,6 +603,7 @@ async function handleStartGame(seasonId: string, gameId: string) {
       homeScore: simResult.finalScore.home,
       awayScore: simResult.finalScore.away,
       boxScore: boxScoreWithMvp,
+      weather: simResult.weather as unknown as Record<string, unknown>,
       totalPlays: simResult.totalPlays,
       broadcastStartedAt: now,
       serverSeedHash: simResult.serverSeedHash,

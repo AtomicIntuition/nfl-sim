@@ -402,6 +402,32 @@ const PENALTY_TEMPLATES: CommentaryTemplate[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// WEATHER-SPECIFIC TEMPLATES
+// ---------------------------------------------------------------------------
+
+const WEATHER_RUN_TEMPLATES: CommentaryTemplate[] = [
+  { playByPlay: '{rusher} slips but keeps his balance... {yards} yards in the rain. {downResult}', colorAnalysis: 'The footing is treacherous out there. {teamName} has to be careful with the ball.', crowdReaction: 'cheer' },
+  { playByPlay: 'Through the snow, {rusher} churns for {yards} yards. {downResult}', colorAnalysis: "Nobody's getting good footing in these conditions.", crowdReaction: 'cheer' },
+  { playByPlay: '{rusher} trudges through the slop for {yards}. {downResult}', colorAnalysis: '{weather} making it tough to get anything going on the ground.', crowdReaction: 'murmur' },
+];
+
+const WEATHER_PASS_TEMPLATES: CommentaryTemplate[] = [
+  { playByPlay: '{passer} throws into the wind... {receiver} hangs on for {yards}. {downResult}', colorAnalysis: 'That ball was moving all over the place. Great catch.', crowdReaction: 'cheer' },
+  { playByPlay: 'Through the snow, {passer} finds {receiver} for {yards}. {downResult}', colorAnalysis: "Incredible throw in these conditions. You can barely see out there.", crowdReaction: 'cheer' },
+  { playByPlay: '{passer} fights the elements, hits {receiver} for {yards}. {downResult}', colorAnalysis: '{weather} — and he still makes that throw. Impressive.', crowdReaction: 'cheer' },
+];
+
+const WEATHER_FG_TEMPLATES: CommentaryTemplate[] = [
+  { playByPlay: 'In this wind, a {yards}-yard attempt is no gimme... the kick is up...', colorAnalysis: 'The wind is absolutely howling. This is a gutsy attempt.', crowdReaction: 'silence' },
+  { playByPlay: '{yards}-yard attempt in the {weather}... the snap, the hold, the kick...', colorAnalysis: 'Conditions like this can turn a routine kick into an adventure.', crowdReaction: 'silence' },
+];
+
+const WEATHER_INCOMPLETE_TEMPLATES: CommentaryTemplate[] = [
+  { playByPlay: '{passer} tries to fight through the {weather}... pass sails incomplete.', colorAnalysis: 'The conditions are really affecting the passing game today.', crowdReaction: 'murmur' },
+  { playByPlay: 'The ball slips out of {passer}\'s hand... incomplete in the {weather}.', colorAnalysis: "It's nearly impossible to grip the ball in these conditions.", crowdReaction: 'groan' },
+];
+
+// ---------------------------------------------------------------------------
 // TWO-MINUTE DRILL
 // ---------------------------------------------------------------------------
 
@@ -711,6 +737,17 @@ export function getTemplate(
   }
 
   // -----------------------------------------------------------------------
+  // Weather-specific templates (~30% of the time in bad weather)
+  // -----------------------------------------------------------------------
+  const hasWeather = state.weather && (state.weather.type === 'rain' || state.weather.type === 'snow' || state.weather.type === 'wind' || state.weather.type === 'fog');
+  if (hasWeather && rng.randomInt(0, 9) < 3) {
+    if (play.type === 'run') return pickRandom(WEATHER_RUN_TEMPLATES, rng);
+    if (play.type === 'pass_complete') return pickRandom(WEATHER_PASS_TEMPLATES, rng);
+    if (play.type === 'pass_incomplete') return pickRandom(WEATHER_INCOMPLETE_TEMPLATES, rng);
+    if (play.type === 'field_goal') return pickRandom(WEATHER_FG_TEMPLATES, rng);
+  }
+
+  // -----------------------------------------------------------------------
   // Standard play type selection
   // -----------------------------------------------------------------------
   switch (play.type) {
@@ -882,6 +919,15 @@ export function buildTemplateVars(
   }
   if (play.defensiveCall?.runStunt && play.defensiveCall.runStunt !== 'none') {
     vars.stunt = STUNT_DISPLAY[play.defensiveCall.runStunt] || play.defensiveCall.runStunt;
+  }
+
+  // Weather variable
+  if (state.weather) {
+    const weatherLabels: Record<string, string> = {
+      rain: 'rain', snow: 'snow', fog: 'fog', wind: 'wind',
+      clear: 'clear skies', cloudy: 'overcast skies',
+    };
+    vars.weather = weatherLabels[state.weather.type] || state.weather.type;
   }
 
   return vars;

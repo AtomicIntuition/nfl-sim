@@ -62,6 +62,12 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
     }
   }, [awayScore]);
 
+  // Weather display
+  const weatherInfo = gameState.weather;
+  const weatherEmoji: Record<string, string> = {
+    clear: '☀️', cloudy: '☁️', rain: '🌧️', snow: '❄️', fog: '🌫️', wind: '💨',
+  };
+
   const situationText = isHalftime
     ? 'HALFTIME'
     : kickoff
@@ -160,6 +166,11 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
             <span className="text-xs font-bold text-text-muted tracking-widest uppercase mt-0.5">
               {formatQuarter(quarter)}
             </span>
+            {weatherInfo && (
+              <span className="text-[10px] text-text-muted mt-0.5">
+                {weatherEmoji[weatherInfo.type] || ''} {weatherInfo.temperature}°F
+              </span>
+            )}
           </div>
 
           {/* Home team block */}
@@ -268,6 +279,11 @@ export function ScoreBug({ gameState, status }: ScoreBugProps) {
             <span className="text-[9px] font-bold text-text-muted tracking-widest uppercase">
               {formatQuarter(quarter)}
             </span>
+            {weatherInfo && (
+              <span className="text-[9px] text-text-muted">
+                {weatherEmoji[weatherInfo.type] || ''} {weatherInfo.temperature}°F
+              </span>
+            )}
           </div>
 
           {/* Home side */}

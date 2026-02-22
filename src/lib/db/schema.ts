@@ -154,6 +154,7 @@ export const games = pgTable(
     totalPlays: integer('total_plays'),
     mvpPlayerId: uuid('mvp_player_id').references(() => players.id),
     boxScore: jsonb('box_score'),
+    weather: jsonb('weather'),
     scheduledAt: timestamp('scheduled_at'),
     broadcastStartedAt: timestamp('broadcast_started_at'),
     completedAt: timestamp('completed_at'),
