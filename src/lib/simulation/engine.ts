@@ -120,6 +120,7 @@ import {
   fillTemplate,
   buildTemplateVars,
 } from '../commentary/templates';
+import { generateCommentaryBatch } from '../commentary/generator';
 
 // --- Constants ---
 import {
@@ -1339,20 +1340,48 @@ export async function simulateGameWithCommentary(
   }
 
   // Batch-replace commentary with AI-generated versions.
-  // This is a placeholder for the actual Claude API integration.
-  // Each event's commentary would be sent to the API with game context,
-  // and the response would replace the template commentary.
-  //
-  // For now, the template commentary is used as the final output.
-  // The actual implementation would:
-  //   1. Batch events into groups of ~10 for efficient API calls
-  //   2. Send play descriptions, game state, and narrative context
-  //   3. Receive rich play-by-play and color analysis text
-  //   4. Replace commentary fields on each event
-  //
-  // Example (when API is integrated):
-  // const enhancedEvents = await batchGenerateCommentary(game.events);
-  // game.events = enhancedEvents;
+  // Skip pregame/coin_toss events (indices 0 and 1) — keep their hardcoded text.
+  const playEvents = game.events.slice(2);
+
+  if (playEvents.length === 0) {
+    return game;
+  }
+
+  const batchInput = playEvents.map((event) => ({
+    play: event.playResult,
+    state: event.gameState,
+    narrative: event.narrativeContext,
+    excitement: event.narrativeContext.excitement,
+  }));
+
+  try {
+    const aiCommentary = await generateCommentaryBatch(
+      batchInput,
+      { name: config.homeTeam.name, abbreviation: config.homeTeam.abbreviation },
+      { name: config.awayTeam.name, abbreviation: config.awayTeam.abbreviation },
+    );
+
+    // Replace template commentary with AI-generated commentary
+    for (let i = 0; i < aiCommentary.length; i++) {
+      game.events[i + 2].commentary = aiCommentary[i];
+    }
+
+    // Re-apply two-minute warning annotations (since AI commentary overwrote them)
+    for (let i = 2; i < game.events.length; i++) {
+      const event = game.events[i];
+      const prevEvent = game.events[i - 1];
+      // Detect two-minute warning: clock crossed below 120 between events
+      if (prevEvent && prevEvent.gameState.clock > 120 && event.gameState.clock <= 120) {
+        const q = event.gameState.quarter;
+        if (q === 2 || q === 4) {
+          event.commentary.playByPlay = `Two-minute warning. ${event.commentary.playByPlay}`;
+        }
+      }
+    }
+  } catch (error) {
+    // If AI commentary fails entirely, template commentary remains intact
+    console.warn('[Commentary] AI commentary generation failed, using templates:', error);
+  }
 
   return game;
 }

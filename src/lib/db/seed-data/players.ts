@@ -195,6 +195,7 @@ function pickName(rng: () => number): string {
 // ============================================================
 
 interface ESPNAthlete {
+  id: string;
   fullName: string;
   jersey?: string;
   position: { abbreviation: string };
@@ -330,9 +331,11 @@ export async function generatePlayersFromESPN(
     // Use ESPN name + jersey if available, otherwise fall back
     let name: string;
     let number: number;
+    let espnIdValue: string | undefined;
 
     if (espnPlayer) {
       name = espnPlayer.fullName;
+      espnIdValue = espnPlayer.id;
       const espnJersey = espnPlayer.jersey ? parseInt(espnPlayer.jersey, 10) : NaN;
 
       if (!isNaN(espnJersey) && espnJersey >= 0 && espnJersey <= 99 && !usedNumbers.has(espnJersey)) {
@@ -364,6 +367,7 @@ export async function generatePlayersFromESPN(
       awareness,
       clutchRating,
       injuryProne,
+      ...(espnIdValue ? { espnId: espnIdValue } : {}),
     });
   }
 

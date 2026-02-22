@@ -107,6 +107,7 @@ export const players = pgTable('players', {
   awareness: integer('awareness').notNull(),
   clutchRating: integer('clutch_rating').notNull(),
   injuryProne: boolean('injury_prone').default(false),
+  espnId: varchar('espn_id', { length: 20 }),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

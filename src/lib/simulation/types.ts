@@ -79,6 +79,8 @@ export interface Player {
   clutchRating: number;
   /** Whether the player has an elevated risk of leaving a game. */
   injuryProne: boolean;
+  /** ESPN player ID for headshot CDN. */
+  espnId?: string;
 }
 
 // ============================================================
