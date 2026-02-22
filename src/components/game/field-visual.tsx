@@ -15,6 +15,7 @@ import { PlayCallOverlay } from './field/play-call-overlay';
 import { CrowdAtmosphere } from './field/crowd-atmosphere';
 import { FieldCommentaryOverlay } from './field/field-commentary-overlay';
 import { Minimap } from './field/minimap';
+import { KickoffIntroOverlay } from './field/kickoff-intro-overlay';
 
 interface FieldVisualProps {
   ballPosition: number;
@@ -155,6 +156,8 @@ export function FieldVisual({
 
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const coinFlipShownRef = useRef(false);
+  const [showKickoffIntro, setShowKickoffIntro] = useState(false);
+  const kickoffIntroShownRef = useRef(false);
 
   useEffect(() => {
     if (lastPlay?.type === 'coin_toss' && !coinFlipShownRef.current) {
@@ -165,6 +168,18 @@ export function FieldVisual({
 
   const handleCoinFlipComplete = useCallback(() => {
     setShowCoinFlip(false);
+    // After coin flip fades out, show kickoff intro overlay
+    if (!kickoffIntroShownRef.current) {
+      kickoffIntroShownRef.current = true;
+      // Short delay to let coin flip fully fade before intro appears
+      setTimeout(() => {
+        setShowKickoffIntro(true);
+      }, 500);
+    }
+  }, []);
+
+  const handleKickoffIntroComplete = useCallback(() => {
+    setShowKickoffIntro(false);
   }, []);
 
   // ── Kicking detection ─────────────────────────────────
@@ -390,6 +405,7 @@ export function FieldVisual({
             gameStatus={gameStatus === 'game_over' ? 'game_over' : gameStatus === 'halftime' ? 'halftime' : gameStatus === 'live' ? 'live' : 'pregame'}
             teamAbbreviation={possessingTeam.abbreviation}
             teamColor={possessingTeam.primaryColor}
+            opposingTeamAbbreviation={opposingTeam.abbreviation}
           />
 
           {/* Ball marker — neutral LOS dot (hides during PlayScene animation) */}
@@ -449,6 +465,14 @@ export function FieldVisual({
           show={showCoinFlip}
           winningTeam={possession === 'home' ? awayTeam.abbreviation : homeTeam.abbreviation}
           onComplete={handleCoinFlipComplete}
+        />
+
+        {/* Kickoff intro overlay (shown between coin flip and first kickoff) */}
+        <KickoffIntroOverlay
+          show={showKickoffIntro}
+          awayTeam={awayTeam}
+          homeTeam={homeTeam}
+          onComplete={handleKickoffIntroComplete}
         />
 
         {/* Celebration overlay */}

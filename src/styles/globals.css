@@ -851,3 +851,41 @@ body {
 .logo-carrier-glow {
   animation: logo-carrier-glow 1.2s ease-in-out infinite;
 }
+
+/* ─── Kickoff 3D Football Spiral ─── */
+@keyframes kickoff-spiral {
+  0% { transform: rotateY(0deg) rotateX(15deg); }
+  100% { transform: rotateY(1080deg) rotateX(15deg); }
+}
+
+/* ─── Kickoff Landing Flash ─── */
+@keyframes kickoff-land-flash {
+  0% { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(3); }
+}
+
+.kickoff-land-flash-anim {
+  animation: kickoff-land-flash 0.4s ease-out forwards;
+}
+
+/* ─── Kickoff Intro Overlay ─── */
+@keyframes kickoff-intro-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes kickoff-intro-logo-slide-left {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes kickoff-intro-logo-slide-right {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes kickoff-intro-vs-pop {
+  0% { opacity: 0; transform: scale(0.3); }
+  60% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}

@@ -322,8 +322,10 @@ function getPlaybackDelay(event: GameEvent): number {
   // High excitement commentary
   if (commentary.excitement > 70) return 2000;
 
-  // Kickoffs and punts
-  if (playResult.type === 'kickoff' || playResult.type === 'punt') return 1500;
+  // Kickoffs get extra time for intro overlay and dramatic ball flight
+  if (playResult.type === 'kickoff') return 2500;
+  // Punts
+  if (playResult.type === 'punt') return 1500;
 
   // Normal plays
   return 1200;

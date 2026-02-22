@@ -14,6 +14,8 @@ import {
   SNAP_MS,
   DEVELOPMENT_MS,
   RESULT_MS,
+  KICKOFF_PHASE_END,
+  getKickoffDevMs,
 } from './play-scene';
 import type { Phase } from './play-scene';
 import { getTeamLogoUrl } from '@/lib/utils/team-logos';
@@ -55,9 +57,11 @@ interface PlayersOverlayProps {
   teamAbbreviation?: string;
   /** Team primary color for carrier logo border */
   teamColor?: string;
+  /** Opposing team abbreviation (for kickoff return carrier logo) */
+  opposingTeamAbbreviation?: string;
 }
 
-type CarrierMode = 'qb_keeps' | 'handoff' | 'pass' | 'scramble' | 'special';
+type CarrierMode = 'qb_keeps' | 'handoff' | 'pass' | 'scramble' | 'special' | 'kickoff_return';
 
 interface BallCarrierState {
   /** Index of the current logo carrier in offense dots */
@@ -150,6 +154,7 @@ export function PlayersOverlay({
   gameStatus,
   teamAbbreviation,
   teamColor,
+  opposingTeamAbbreviation,
 }: PlayersOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef(0);
@@ -255,8 +260,18 @@ export function PlayersOverlay({
         transferT: 1,
         carrierMode: 'qb_keeps',
       };
+    } else if (playType === 'kickoff') {
+      // Kickoff: KR gets team logo after ball lands
+      // Defense dots contain the receiving team (KR is in defPositions for kickoffs)
+      const krIdx = defPositions.findIndex(p => p.role === 'KR');
+      carrierState = {
+        currentCarrierIdx: -1, // no carrier during flight
+        receiverIdx: krIdx >= 0 ? krIdx : -1,
+        transferT: KICKOFF_PHASE_END, // ball lands
+        carrierMode: 'kickoff_return',
+      };
     } else {
-      // Special teams (kickoff, punt, FG, XP) — no carrier logo
+      // Special teams (punt, FG, XP) — no carrier logo
       carrierState = {
         currentCarrierIdx: -1,
         receiverIdx: -1,
@@ -407,8 +422,10 @@ export function PlayersOverlay({
       setRouteLines([]);
     }
 
+    const devDurationMs = playType === 'kickoff' ? getKickoffDevMs(lastPlay) : DEVELOPMENT_MS;
+
     function tick(now: number) {
-      const t = Math.min((now - startTime) / DEVELOPMENT_MS, 1);
+      const t = Math.min((now - startTime) / devDurationMs, 1);
       const eased = easeOutCubic(t);
 
       // Check carrier transfer
@@ -744,8 +761,8 @@ export function PlayersOverlay({
       if (playType === 'kickoff') {
         if (p.role === 'KR') {
           // KR waits for catch, then runs with 4-cut juke pattern
-          if (t < 0.28) return p;
-          const returnT = (t - 0.28) / 0.72;
+          if (t < KICKOFF_PHASE_END) return p;
+          const returnT = (t - KICKOFF_PHASE_END) / (1 - KICKOFF_PHASE_END);
           const ballX = lerp(fromX, toX, easeOutCubic(returnT));
           const amplitude = 14 * (1 - returnT * 0.5); // decaying juke amplitude
           return {
@@ -757,8 +774,8 @@ export function PlayersOverlay({
         }
         if (p.role === 'WDG') {
           // Wedge blockers: form up ahead of returner, move as a unit
-          if (t < 0.28) return p;
-          const returnT = (t - 0.28) / 0.72;
+          if (t < KICKOFF_PHASE_END) return p;
+          const returnT = (t - KICKOFF_PHASE_END) / (1 - KICKOFF_PHASE_END);
           const ballX = lerp(fromX, toX, easeOutCubic(returnT));
           return {
             ...p,
@@ -827,17 +844,18 @@ export function PlayersOverlay({
     const defDots = container.querySelectorAll<HTMLDivElement>('.player-dot-def');
     const cs = carrierStateRef.current;
     const activeCarrier = carrierTransferredRef.current ? cs.receiverIdx : cs.currentCarrierIdx;
+    const isKickoffReturn = cs.carrierMode === 'kickoff_return';
 
     offDotsRef.current.forEach((pos, i) => {
       const el = offDots[i];
       if (el) {
         el.style.left = `${pos.x}%`;
         el.style.top = `${pos.y}%`;
-        // Toggle logo vs dot visibility
+        // Toggle logo vs dot visibility (offense side — not used for kickoff_return)
         const logo = el.querySelector<HTMLDivElement>('.carrier-logo');
         const dot = el.querySelector<HTMLDivElement>('.carrier-dot');
         if (logo && dot) {
-          if (i === activeCarrier && cs.carrierMode !== 'special') {
+          if (i === activeCarrier && cs.carrierMode !== 'special' && cs.carrierMode !== 'kickoff_return') {
             logo.style.display = 'block';
             dot.style.display = 'none';
           } else {
@@ -853,6 +871,23 @@ export function PlayersOverlay({
       if (el) {
         el.style.left = `${pos.x}%`;
         el.style.top = `${pos.y}%`;
+        // For kickoff_return: show team logo on KR after ball lands
+        if (isKickoffReturn) {
+          const logo = el.querySelector<HTMLDivElement>('.carrier-logo');
+          const dot = el.querySelector<HTMLDivElement>('.carrier-dot');
+          if (logo && dot) {
+            if (i === activeCarrier && carrierTransferredRef.current) {
+              logo.style.display = 'block';
+              dot.style.display = 'none';
+              // Make KR dot larger
+              el.style.zIndex = '6';
+            } else {
+              logo.style.display = 'none';
+              dot.style.display = 'block';
+              el.style.zIndex = '3';
+            }
+          }
+        }
       }
     });
   }, []);
@@ -981,25 +1016,86 @@ export function PlayersOverlay({
         const role = pos.role || 'DEF';
         const isDL = role === 'DE' || role === 'DT' || role === 'NT';
         const isDB = role === 'CB' || role === 'NCB' || role === 'S';
+        const isKR = role === 'KR';
         const dotSize = isDL ? 11 : isDB ? 9 : 10;
+        // For kickoff returns: KR gets carrier logo after ball lands
+        const isKRCarrier = cs.carrierMode === 'kickoff_return' && i === cs.receiverIdx && carrierTransferredRef.current;
+        const showKRLogo = isKRCarrier && (phase === 'development' || phase === 'result');
+        // Receiving team's logo for KR (opposing team in kickoffs)
+        const krLogoUrl = isKR && cs.carrierMode === 'kickoff_return' && opposingTeamAbbreviation
+          ? getTeamLogoUrl(opposingTeamAbbreviation)
+          : null;
+
         return (
           <div
             key={`def-${i}`}
-            className={`player-dot-def absolute ${isDL ? 'rounded-sm' : 'rounded-full'}`}
+            className="player-dot-def absolute"
             style={{
               left: `${pos.x}%`,
               top: `${pos.y}%`,
-              width: dotSize,
-              height: dotSize,
-              backgroundColor: defenseColor,
-              opacity: 0.85,
               transform: 'translate(-50%, -50%)',
-              border: isDL ? '1px solid rgba(255,255,255,0.3)' : 'none',
-              boxShadow: `0 0 5px ${defenseColor}80`,
-              zIndex: 3,
+              zIndex: showKRLogo ? 6 : 3,
               transition: transitionStyle,
             }}
-          />
+          >
+            {/* KR carrier logo (shown during kickoff return after ball lands) */}
+            {isKR && cs.carrierMode === 'kickoff_return' && (
+              <div
+                className="carrier-logo logo-carrier-glow"
+                style={{
+                  display: showKRLogo ? 'block' : 'none',
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  backgroundColor: '#1a1a2e',
+                  border: `2px solid ${defenseColor}`,
+                  boxShadow: `0 0 10px ${defenseColor}50, 0 2px 6px rgba(0,0,0,0.5)`,
+                }}
+              >
+                {krLogoUrl ? (
+                  <img
+                    src={krLogoUrl}
+                    alt=""
+                    style={{
+                      width: 18,
+                      height: 18,
+                      objectFit: 'contain',
+                      margin: '2px auto',
+                      display: 'block',
+                    }}
+                    draggable={false}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 18,
+                      height: 18,
+                      margin: '2px auto',
+                      borderRadius: '50%',
+                      backgroundColor: defenseColor,
+                      opacity: 0.9,
+                    }}
+                  />
+                )}
+              </div>
+            )}
+            {/* Regular player dot */}
+            <div
+              className={`carrier-dot ${isDL ? 'rounded-sm' : 'rounded-full'} ${isKRCarrier && !showKRLogo ? 'player-carrier-pulse' : ''}`}
+              style={{
+                display: showKRLogo ? 'none' : 'block',
+                width: isKRCarrier ? 14 : dotSize,
+                height: isKRCarrier ? 14 : dotSize,
+                backgroundColor: defenseColor,
+                opacity: isKRCarrier ? 1.0 : 0.85,
+                border: isDL ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                boxShadow: isKRCarrier
+                  ? `0 0 12px 4px ${defenseColor}`
+                  : `0 0 5px ${defenseColor}80`,
+              }}
+            />
+          </div>
         );
       })}
     </div>

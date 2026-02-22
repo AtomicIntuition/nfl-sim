@@ -40,6 +40,9 @@ export function getKickoffDevMs(play: PlayResult | null): number {
 
 export type Phase = 'idle' | 'pre_snap' | 'snap' | 'development' | 'result' | 'post_play';
 
+/** Kickoff flight phase fraction (when ball lands) — shared with PlayersOverlay */
+export const KICKOFF_PHASE_END = 0.45;
+
 // ── Easing ───────────────────────────────────────────────────
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
@@ -323,7 +326,7 @@ export function PlayScene({
       {/* ─── Trailing dots for runs, scrambles, and kick returns ─── */}
       {phase === 'development' && (() => {
         const isRunType = playType === 'run' || playType === 'scramble' || playType === 'two_point';
-        const isKickReturn = (playType === 'kickoff' || playType === 'punt') && animProgress > 0.35;
+        const isKickReturn = (playType === 'kickoff' || playType === 'punt') && animProgress > 0.5;
         if (!isRunType && !isKickReturn) return null;
         if (isRunType && animProgress <= 0.1) return null;
         return (
@@ -352,10 +355,147 @@ export function PlayScene({
         );
       })()}
 
-      {/* ─── Animated football (simple brown oval) ─── */}
+      {/* ─── Animated football ─── */}
       {(() => {
         const isPass = playType === 'pass_complete' || playType === 'pass_incomplete';
         const isRun = playType === 'run' || playType === 'scramble' || playType === 'two_point';
+        const isKickoffFlight = playType === 'kickoff' && animProgress <= KICKOFF_PHASE_END;
+        const isKickoffTouchback = playType === 'kickoff' && lastPlay.yardsGained === 0;
+
+        // During kickoff flight phase: large 3D football with spiral
+        if (isKickoffFlight || (isKickoffTouchback && phase === 'development')) {
+          const flightProgress = isKickoffTouchback ? animProgress : animProgress / KICKOFF_PHASE_END;
+          // Scale: starts large (coming at viewer), shrinks as it lands
+          const scale = 2.0 - flightProgress * 1.0;
+          // Shadow grows as ball descends (simulates altitude)
+          const shadowScale = 0.3 + flightProgress * 0.7;
+          const shadowOpacity = 0.15 + flightProgress * 0.35;
+          // Spiral animation progress
+          const spiralDeg = flightProgress * 1080;
+          // Opacity: fade in quickly
+          const opacity = Math.min(1, flightProgress * 4);
+
+          return (
+            <div
+              className="absolute"
+              style={{
+                left: `${clamp(ballPos.x, 2, 98)}%`,
+                top: `${clamp(ballPos.y, 5, 95)}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 8,
+                perspective: '200px',
+              }}
+            >
+              {/* Drop shadow below ball */}
+              <div
+                className="absolute rounded-full"
+                style={{
+                  width: 30 * shadowScale,
+                  height: 10 * shadowScale,
+                  left: '50%',
+                  top: `${20 + flightProgress * 10}px`,
+                  transform: 'translateX(-50%)',
+                  background: 'radial-gradient(ellipse, rgba(0,0,0,0.5) 0%, transparent 70%)',
+                  opacity: shadowOpacity,
+                }}
+              />
+              {/* 3D Football */}
+              <div
+                style={{
+                  width: 44,
+                  height: 28,
+                  transformStyle: 'preserve-3d',
+                  transform: `scale(${scale}) rotateY(${spiralDeg}deg) rotateX(15deg)`,
+                  opacity,
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 40%, #6B3410 100%)',
+                    border: '1.5px solid #5C2D06',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.15)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Laces */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '30%',
+                      width: '40%',
+                      height: '2px',
+                      background: 'rgba(255,255,255,0.7)',
+                      transform: 'translateY(-50%)',
+                      borderRadius: '1px',
+                    }}
+                  />
+                  {[0, 1, 2, 3].map(i => (
+                    <div
+                      key={i}
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(50% - 4px)',
+                        left: `${33 + i * 9}%`,
+                        width: '1.5px',
+                        height: '8px',
+                        background: 'rgba(255,255,255,0.6)',
+                        borderRadius: '1px',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+              {/* Landing flash when ball arrives */}
+              {flightProgress > 0.92 && (
+                <div
+                  className="absolute rounded-full kickoff-land-flash-anim"
+                  style={{
+                    width: 20,
+                    height: 20,
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%)',
+                  }}
+                />
+              )}
+            </div>
+          );
+        }
+
+        // After kickoff flight phase: normal small ball during return, or hide on touchback
+        if (playType === 'kickoff' && animProgress > KICKOFF_PHASE_END) {
+          // Normal return ball (smaller, no spiral)
+          return (
+            <div
+              className="absolute"
+              style={{
+                left: `${clamp(ballPos.x, 2, 98)}%`,
+                top: `${clamp(ballPos.y, 5, 95)}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 6,
+                opacity: 0.5,
+              }}
+            >
+              <div
+                style={{
+                  width: 14,
+                  height: 9,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
+                  border: '1px solid #5C2D06',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                }}
+              />
+            </div>
+          );
+        }
+
         // Spin football on passes; reduce opacity on runs (carrier logo is the main visual)
         const spinDeg = isPass ? animProgress * 720 : 0;
         const ballOpacity = isRun ? 0.5 : 1;
@@ -889,7 +1029,7 @@ function calculateKickoffPosition(
 
   // Arc height proportional to kick distance (not fixed)
   const kickDist = Math.abs(landingX - fromX);
-  const arcHeight = Math.min(kickDist * 0.5, 30);
+  const arcHeight = Math.min(kickDist * 0.6, 40);
 
   if (isTouchback) {
     // Ball arcs fully into the end zone
@@ -898,7 +1038,7 @@ function calculateKickoffPosition(
     return { x, y: 50 - arcHeight * Math.sin(t * Math.PI) };
   }
 
-  const kickPhaseEnd = 0.28; // Faster flight (was 0.32)
+  const kickPhaseEnd = 0.45; // Longer flight for dramatic 3D football
 
   if (t < kickPhaseEnd) {
     // Phase 1: Kick arc from kicker to landing spot
@@ -1084,7 +1224,7 @@ function PlayTrajectory({
       const desc = (lastPlay.description || '').toLowerCase();
       const isFairCatch = desc.includes('fair catch');
       const isTouchback = lastPlay.yardsGained === 0 || desc.includes('touchback');
-      const kickPhaseEnd = isKickoff ? 0.28 : 0.45;
+      const kickPhaseEnd = isKickoff ? 0.45 : 0.45;
 
       // Calculate landing point using travel direction, not offDir
       let landingX: number;
@@ -1103,7 +1243,7 @@ function PlayTrajectory({
       }
 
       const dist = Math.abs(landingX - fromX);
-      const arcH = isKickoff ? Math.min(dist * 0.5, 30) : Math.min(dist * 0.9, 38);
+      const arcH = isKickoff ? Math.min(dist * 0.6, 40) : Math.min(dist * 0.9, 38);
       const midX = (fromX + landingX) / 2;
 
       // Kick arc (dashed gold)
