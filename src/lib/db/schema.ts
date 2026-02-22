@@ -152,6 +152,7 @@ export const games = pgTable(
     clientSeed: varchar('client_seed', { length: 64 }),
     nonce: integer('nonce'),
     totalPlays: integer('total_plays'),
+    gameDurationMs: integer('game_duration_ms'),
     mvpPlayerId: uuid('mvp_player_id').references(() => players.id),
     boxScore: jsonb('box_score'),
     weather: jsonb('weather'),

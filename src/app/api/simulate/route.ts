@@ -594,6 +594,11 @@ async function handleStartGame(seasonId: string, gameId: string) {
     mvp: simResult.mvp,
   };
 
+  // Compute game duration from the last event's displayTimestamp
+  const lastEventTimestamp = dbEvents.length > 0
+    ? dbEvents[dbEvents.length - 1].displayTimestamp
+    : 0;
+
   // Update game to broadcasting status with final score and provably-fair seeds
   const now = new Date();
   await db
@@ -605,6 +610,7 @@ async function handleStartGame(seasonId: string, gameId: string) {
       boxScore: boxScoreWithMvp,
       weather: simResult.weather as unknown as Record<string, unknown>,
       totalPlays: simResult.totalPlays,
+      gameDurationMs: lastEventTimestamp,
       broadcastStartedAt: now,
       serverSeedHash: simResult.serverSeedHash,
       serverSeed: simResult.serverSeed,
@@ -613,6 +619,9 @@ async function handleStartGame(seasonId: string, gameId: string) {
       mvpPlayerId: simResult.mvp?.player?.id ?? null,
     })
     .where(eq(games.id, gameId));
+
+  // Re-project future game times now that we know exact duration
+  await projectFutureGameTimes(seasonId);
 
   return {
     gameId,
@@ -1382,49 +1391,16 @@ async function estimateWeekGameTimes(
 
 /**
  * Projects scheduledAt for ALL future games in the season.
- * Chains from the last known anchor (completed game's completedAt,
- * broadcasting game's estimated end, or current time).
- * Games within a week are spaced by ESTIMATED_GAME_SLOT_MS (95 min).
- * A 30-minute break separates the last game of one week from the first of the next.
+ *
+ * Key improvements over the naive approach:
+ * 1. Uses gameDurationMs (actual event stream length) + 60s buffer for
+ *    the broadcasting game anchor — giving the NEXT game an exact start time.
+ * 2. Averages gameDurationMs from completed games (not broadcast wall-clock
+ *    duration, which includes idle/wait time that inflates estimates).
+ * 3. Adds INTERMISSION_MS between games and WEEK_BREAK_MS between weeks.
  */
 async function projectFutureGameTimes(seasonId: string) {
-  // Compute average actual game slot from completed games in this season.
-  // This replaces the fixed ESTIMATED_GAME_SLOT_MS with real data.
-  let gameSlotMs = ESTIMATED_GAME_SLOT_MS;
-
-  const completedForAvg = await db
-    .select()
-    .from(games)
-    .where(
-      and(
-        eq(games.seasonId, seasonId),
-        eq(games.status, 'completed')
-      )
-    );
-
-  const durations: number[] = [];
-  for (const g of completedForAvg) {
-    if (g.broadcastStartedAt && g.completedAt) {
-      const dur = g.completedAt.getTime() - new Date(g.broadcastStartedAt).getTime();
-      if (dur > 0 && dur < 7_200_000) { // sanity: discard > 2hr outliers
-        durations.push(dur);
-      }
-    }
-  }
-
-  if (durations.length >= 3) {
-    const avg = durations.reduce((sum, d) => sum + d, 0) / durations.length;
-    gameSlotMs = avg + INTERMISSION_MS;
-  }
-
-  // Get season info
-  const seasonRows = await db
-    .select()
-    .from(seasons)
-    .where(eq(seasons.id, seasonId))
-    .limit(1);
-  if (seasonRows.length === 0) return;
-  const season = seasonRows[0];
+  const BROADCAST_BUFFER_MS = 60_000; // 60s post-broadcast buffer
 
   // Get all games ordered by week then by existing scheduledAt
   const allGames = await db
@@ -1433,29 +1409,52 @@ async function projectFutureGameTimes(seasonId: string) {
     .where(eq(games.seasonId, seasonId))
     .orderBy(asc(games.week), asc(games.scheduledAt));
 
-  // Find the anchor: last completed/broadcasting game
+  // Only project for scheduled games
+  const scheduled = allGames.filter((g) => g.status === 'scheduled');
+  if (scheduled.length === 0) return;
+
+  // Compute average game duration from completed games using gameDurationMs.
+  // This is the actual event stream length, not wall-clock broadcast time.
+  let gameSlotMs = ESTIMATED_GAME_SLOT_MS;
+
+  const completedDurations: number[] = [];
+  for (const g of allGames) {
+    if (g.status === 'completed' && g.gameDurationMs && g.gameDurationMs > 0) {
+      completedDurations.push(g.gameDurationMs + BROADCAST_BUFFER_MS + INTERMISSION_MS);
+    }
+  }
+
+  if (completedDurations.length >= 3) {
+    gameSlotMs = completedDurations.reduce((sum, d) => sum + d, 0) / completedDurations.length;
+  }
+
+  // Find the anchor point — the time at which the next game will start.
   let anchor = Date.now();
 
-  // Check for a broadcasting game — anchor is its estimated end
   const broadcasting = allGames.find((g) => g.status === 'broadcasting');
   if (broadcasting?.broadcastStartedAt) {
-    // Estimate end = broadcast start + game slot
-    anchor = new Date(broadcasting.broadcastStartedAt).getTime() + gameSlotMs;
+    // When a game is broadcasting, we know its exact duration.
+    // Next game starts at: broadcastStart + gameDuration + buffer + intermission
+    const duration = broadcasting.gameDurationMs ?? 0;
+    anchor =
+      new Date(broadcasting.broadcastStartedAt).getTime() +
+      duration +
+      BROADCAST_BUFFER_MS +
+      INTERMISSION_MS;
   } else {
-    // Find last completed game
+    // No broadcasting game — anchor from last completed game
     const completed = allGames
       .filter((g) => g.status === 'completed' && g.completedAt)
       .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime());
     if (completed.length > 0) {
-      const lastCompleted = completed[0];
-      // Anchor = completedAt + intermission
-      anchor = lastCompleted.completedAt!.getTime() + INTERMISSION_MS;
+      anchor = completed[0].completedAt!.getTime() + INTERMISSION_MS;
     }
   }
 
-  // Only project for scheduled games
-  const scheduled = allGames.filter((g) => g.status === 'scheduled');
-  if (scheduled.length === 0) return;
+  // Ensure anchor is not in the past (can happen if intermission already elapsed)
+  if (anchor < Date.now()) {
+    anchor = Date.now();
+  }
 
   // Group scheduled games by week
   const byWeek = new Map<number, typeof scheduled>();
@@ -1465,15 +1464,24 @@ async function projectFutureGameTimes(seasonId: string) {
     byWeek.set(g.week, weekGames);
   }
 
-  // Sort weeks
+  // Determine which week the anchor belongs to (current week with scheduled games,
+  // or the first week that still has scheduled games)
+  const anchorWeek = broadcasting?.week
+    ?? allGames
+        .filter((g) => g.status === 'completed')
+        .sort((a, b) => b.week - a.week)[0]?.week
+    ?? scheduled[0]?.week
+    ?? 1;
+
   const weeks = [...byWeek.keys()].sort((a, b) => a - b);
 
   let cursor = anchor;
   let isFirstWeek = true;
 
   for (const week of weeks) {
-    // Add week break before weeks that are after the anchor week
-    if (!isFirstWeek) {
+    // Add week break when transitioning to a new week
+    // (only if this week is different from the anchor's week)
+    if (!isFirstWeek && week > anchorWeek) {
       cursor += WEEK_BREAK_MS;
     }
     isFirstWeek = false;

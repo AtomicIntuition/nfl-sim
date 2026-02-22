@@ -6,6 +6,8 @@ import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 
 interface GameCardProps {
   game: ScheduledGame;
+  /** When true, shows the time without "est." prefix (exact/near-exact time). */
+  isNextGame?: boolean;
 }
 
 function formatRelativeDate(date: Date): string {
@@ -36,7 +38,7 @@ function formatRelativeDate(date: Date): string {
   return `${dateStr} ${timeStr}`;
 }
 
-function getGameTimeLabel(game: ScheduledGame): string | null {
+function getGameTimeLabel(game: ScheduledGame, isNextGame?: boolean): string | null {
   if (game.status === 'broadcasting' || game.status === 'simulating') {
     return 'LIVE NOW';
   }
@@ -44,12 +46,15 @@ function getGameTimeLabel(game: ScheduledGame): string | null {
     return formatRelativeDate(new Date(game.broadcastStartedAt));
   }
   if (game.status === 'scheduled' && game.scheduledAt) {
-    return `est. ${formatRelativeDate(new Date(game.scheduledAt))}`;
+    const timeStr = formatRelativeDate(new Date(game.scheduledAt));
+    // The next game's time is exact (anchored from known broadcast duration),
+    // so don't show "est." prefix for it.
+    return isNextGame ? timeStr : `est. ${timeStr}`;
   }
   return null;
 }
 
-export function GameCard({ game }: GameCardProps) {
+export function GameCard({ game, isNextGame }: GameCardProps) {
   const { homeTeam, awayTeam, homeScore, awayScore, status } = game;
   const isFinished = status === 'completed';
   const isLive = status === 'broadcasting' || status === 'simulating';
@@ -59,7 +64,7 @@ export function GameCard({ game }: GameCardProps) {
   const homeWon = isFinished && hasScores && homeScore > awayScore;
   const awayWon = isFinished && hasScores && awayScore > homeScore;
 
-  const timeLabel = getGameTimeLabel(game);
+  const timeLabel = getGameTimeLabel(game, isNextGame);
 
   return (
     <Link

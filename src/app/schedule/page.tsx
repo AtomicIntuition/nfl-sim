@@ -159,6 +159,9 @@ async function getScheduleData(weekParam?: string) {
       .sort((a, b) => (b.wins ?? 0) - (a.wins ?? 0))
       .slice(0, 4);
 
+    // The next game's ID — used to show exact time (no "est." prefix) on GameCard
+    const nextGameId = nextGame?.id ?? null;
+
     return {
       season,
       targetWeek,
@@ -168,6 +171,7 @@ async function getScheduleData(weekParam?: string) {
       isPlayoffs,
       liveGame: liveGameHydrated,
       nextGame: nextGameHydrated,
+      nextGameId,
       totalGames,
       completedGames,
       topTeams,
@@ -213,6 +217,7 @@ export default async function SchedulePage({
     isPlayoffs,
     liveGame,
     nextGame,
+    nextGameId,
     totalGames,
     completedGames,
     topTeams,
@@ -431,7 +436,7 @@ export default async function SchedulePage({
                 </span>
                 {nextGame.scheduledAt && (
                   <span className="text-[10px] text-text-secondary ml-auto">
-                    est. {formatRelativeTime(new Date(nextGame.scheduledAt))}
+                    {formatRelativeTime(new Date(nextGame.scheduledAt))}
                   </span>
                 )}
               </div>
@@ -486,7 +491,7 @@ export default async function SchedulePage({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-10">
             {scheduledGames.map((game) => (
-              <GameCard key={game.id} game={game} />
+              <GameCard key={game.id} game={game} isNextGame={game.id === nextGameId} />
             ))}
           </div>
         )}
