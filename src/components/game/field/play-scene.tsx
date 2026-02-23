@@ -271,7 +271,7 @@ export function PlayScene({
 
   return (
     <div
-      className="absolute inset-0 pointer-events-none z-10 overflow-hidden"
+      className="absolute inset-0 pointer-events-none z-[15] overflow-hidden"
       style={{
         opacity,
         transition: 'opacity 300ms ease-out',
