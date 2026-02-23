@@ -933,7 +933,7 @@ export function PlayersOverlay({
         const isOL = role === 'C' || role === 'LG' || role === 'RG' || role === 'LT' || role === 'RT';
         const isQB = role === 'QB';
         const helmetW = isOL ? 24 : isCarrier ? 28 : (isQB ? 22 : 20);
-        const helmetH = isOL ? 22 : isCarrier ? 26 : (isQB ? 20 : 18);
+        const helmetH = isOL ? 26 : isCarrier ? 30 : (isQB ? 24 : 22);
         const staggerDelay = phase === 'pre_snap' ? (isOL ? '0ms' : isQB ? '80ms' : '150ms') : '0ms';
         return (
           <div
@@ -1036,7 +1036,7 @@ export function PlayersOverlay({
         const isDB = role === 'CB' || role === 'NCB' || role === 'S';
         const isKR = role === 'KR';
         const helmetW = isDL ? 24 : isDB ? 18 : 20;
-        const helmetH = isDL ? 22 : isDB ? 16 : 18;
+        const helmetH = isDL ? 26 : isDB ? 20 : 22;
         const isKRCarrier = cs.carrierMode === 'kickoff_return' && i === cs.receiverIdx && carrierTransferredRef.current;
         const showKRLogo = isKRCarrier && (phase === 'development' || phase === 'result');
         const krLogoUrl = isKR && cs.carrierMode === 'kickoff_return' && opposingTeamAbbreviation
@@ -1102,7 +1102,7 @@ export function PlayersOverlay({
               className={`carrier-dot ${isKRCarrier && !showKRLogo ? 'player-carrier-pulse' : ''}`}
               viewBox="0 0 28 20"
               width={isKRCarrier ? 28 : helmetW}
-              height={isKRCarrier ? 26 : helmetH}
+              height={isKRCarrier ? 30 : helmetH}
               style={{
                 display: showKRLogo ? 'none' : 'block',
                 transform: defFacingLeft ? 'scaleX(-1)' : 'none',
