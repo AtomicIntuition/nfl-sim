@@ -331,6 +331,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
                 timeElapsed={0}
                 teamColor={(gameState.possession === 'home' ? gameState.homeTeam : gameState.awayTeam).primaryColor}
                 firstDownLine={firstDownLine}
+                possession={gameState.possession}
                 compact
               />
             )}

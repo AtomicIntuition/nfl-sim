@@ -20,6 +20,8 @@ interface DriveTrackerProps {
   teamColor: string;
   /** First down line position (0-100, yards from own goal line). */
   firstDownLine: number;
+  /** Which team has the ball — home drives right-to-left on the field. */
+  possession?: 'home' | 'away';
   /** Compact mode — no Card wrapper, smaller */
   compact?: boolean;
 }
@@ -42,12 +44,16 @@ export function DriveTracker({
   timeElapsed,
   teamColor,
   firstDownLine,
+  possession = 'away',
   compact = false,
 }: DriveTrackerProps) {
+  // For the home team, the drive goes right-to-left on the field,
+  // so flip positions so the bar reads correctly (own goal → opponent goal).
+  const flip = possession === 'home';
   // Clamp positions to 0-100
-  const clampedStart = Math.max(0, Math.min(100, startPosition));
-  const clampedCurrent = Math.max(0, Math.min(100, currentPosition));
-  const clampedFirstDown = Math.max(0, Math.min(100, firstDownLine));
+  const clampedStart = Math.max(0, Math.min(100, flip ? 100 - startPosition : startPosition));
+  const clampedCurrent = Math.max(0, Math.min(100, flip ? 100 - currentPosition : currentPosition));
+  const clampedFirstDown = Math.max(0, Math.min(100, flip ? 100 - firstDownLine : firstDownLine));
 
   // Calculate progress percentages for the bar
   const progressData = useMemo(() => {
