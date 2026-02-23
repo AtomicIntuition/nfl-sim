@@ -85,7 +85,7 @@ export function SnakeTrail({
     startTimeRef.current = performance.now();
     cellsRef.current = [];
 
-    const devDurationMs = 2400; // matches DEVELOPMENT_MS
+    const devDurationMs = 1800; // matches DEVELOPMENT_MS
 
     function tick(now: number) {
       const t = Math.min((now - startTimeRef.current) / devDurationMs, 1);
@@ -157,7 +157,7 @@ export function SnakeTrail({
         const isHead = i === cells.length - 1;
         const normalizedAge = cells.length > 1 ? i / (cells.length - 1) : 1;
         const opacity = isHead ? 0.9 : 0.1 + normalizedAge * 0.4;
-        const size = isHead ? 8 : 4 + normalizedAge * 2;
+        const size = isHead ? 12 : 6 + normalizedAge * 3;
 
         return (
           <div

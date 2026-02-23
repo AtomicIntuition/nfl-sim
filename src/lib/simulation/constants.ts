@@ -546,32 +546,32 @@ export const PLAY_DELAY_HALFTIME = 15000;
 // Total game length: ~60-70 minutes depending on stoppages.
 // ============================================================================
 
-/** Real-time delay when the clock is stopped (huddle + lineup time, ~20s like real NFL) */
-export const REALTIME_PLAY_CLOCK_DELAY_MS = 20_000;
+/** Real-time delay when the clock is stopped (quick huddle, no-downtime football) */
+export const REALTIME_PLAY_CLOCK_DELAY_MS = 4_000;
 
-/** Faster play clock during two-minute drill / hurry-up (~8s snap-to-snap) */
-export const REALTIME_TWO_MINUTE_PLAY_CLOCK_MS = 8_000;
+/** Faster play clock during two-minute drill / hurry-up */
+export const REALTIME_TWO_MINUTE_PLAY_CLOCK_MS = 2_500;
 
 /** Pause between quarters (Q1→Q2, Q3→Q4) */
-export const REALTIME_QUARTER_BREAK_MS = 45_000;
+export const REALTIME_QUARTER_BREAK_MS = 12_000;
 
 /** Halftime break */
-export const REALTIME_HALFTIME_MS = 90_000;
+export const REALTIME_HALFTIME_MS = 20_000;
 
 /** Pause for the two-minute warning */
-export const REALTIME_TWO_MINUTE_WARNING_MS = 10_000;
+export const REALTIME_TWO_MINUTE_WARNING_MS = 4_000;
 
 /** Extra celebration pause after a touchdown */
-export const REALTIME_TOUCHDOWN_BONUS_MS = 8_000;
+export const REALTIME_TOUCHDOWN_BONUS_MS = 3_000;
 
 /** Dramatic pause after a turnover */
-export const REALTIME_TURNOVER_BONUS_MS = 5_000;
+export const REALTIME_TURNOVER_BONUS_MS = 2_000;
 
-/** Estimated total game duration including all delays (~65 min) */
-export const ESTIMATED_GAME_DURATION_MS = 65 * 60 * 1000;
+/** Estimated total game duration including all delays (~20 min) */
+export const ESTIMATED_GAME_DURATION_MS = 20 * 60 * 1000;
 
-/** Estimated game slot including post-game intermission (~80 min) */
-export const ESTIMATED_GAME_SLOT_MS = 80 * 60 * 1000;
+/** Estimated game slot including post-game intermission (~25 min) */
+export const ESTIMATED_GAME_SLOT_MS = 25 * 60 * 1000;
 
 // ============================================================================
 // SCORING DISTRIBUTION TARGETS (for validation / regression testing)
@@ -583,8 +583,8 @@ export const ESTIMATED_GAME_SLOT_MS = 80 * 60 * 1000;
 /** Real NFL average total points per game: ~45-47 (both teams combined) */
 export const AVERAGE_TOTAL_POINTS = 46.0;
 
-/** Average number of plays (both teams) in an NFL game */
-export const AVERAGE_PLAYS_PER_GAME = 140;
+/** Average number of plays (both teams) in a GridIron Live game (higher-tempo) */
+export const AVERAGE_PLAYS_PER_GAME = 220;
 
 /** League-wide pass play percentage (~57%) */
 export const AVERAGE_PASS_PERCENTAGE = 0.57;
@@ -683,35 +683,35 @@ export const SAFETY_POSITION = 2;
 
 export const CLOCK_TIME: Record<string, ClockRange> = {
   /** Run play: snap to whistle + huddle. Clock runs. */
-  run_normal: { min: 25, max: 40 },
+  run_normal: { min: 12, max: 22 },
 
   /** Completed pass: clock runs after the catch until next snap/OOB. */
-  pass_complete: { min: 20, max: 35 },
+  pass_complete: { min: 10, max: 20 },
 
   /** Incomplete pass: clock stops. Only accounts for play clock runoff. */
-  pass_incomplete: { min: 5, max: 10 },
+  pass_incomplete: { min: 3, max: 6 },
 
   /** Sack: clock runs (QB tackled in bounds). */
-  sack: { min: 20, max: 35 },
+  sack: { min: 10, max: 20 },
 
   /** Pre-snap penalty: no game clock elapses (play never started). */
   penalty_presnap: { min: 0, max: 0 },
 
   /** Punt: kick + return + dead ball. Clock stops on change of possession. */
-  punt: { min: 5, max: 10 },
+  punt: { min: 3, max: 6 },
 
   /** Field goal attempt: snap, hold, kick. Clock stops afterward. */
-  field_goal: { min: 5, max: 8 },
+  field_goal: { min: 3, max: 5 },
 
   /** Kickoff: kick + return/touchback. Clock stops on change of possession. */
-  kickoff: { min: 5, max: 8 },
+  kickoff: { min: 3, max: 5 },
 
   /** QB kneel: burns nearly the full play clock. */
-  kneel: { min: 38, max: 40 },
+  kneel: { min: 30, max: 38 },
 
   /** Clock-stopping spike: minimum time off the clock. */
   spike: { min: 2, max: 3 },
 
   /** Two-minute drill / hurry-up: reduced huddle and clock usage. */
-  two_minute_drill: { min: 5, max: 15 },
+  two_minute_drill: { min: 3, max: 8 },
 } as const;

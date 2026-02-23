@@ -798,7 +798,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
           }
 
           // Safety check
-          if (events.length > 300) {
+          if (events.length > 500) {
             gameOver = true;
           }
 
@@ -1392,7 +1392,7 @@ export function simulateGame(config: SimulationConfig): SimulatedGame {
     }
 
     // --- (p) Safety check: prevent infinite loops ---
-    if (events.length > 300) {
+    if (events.length > 500) {
       gameOver = true;
       // Close out any active drive
       if (statsAccumulator.currentDrive) {

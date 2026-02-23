@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { PlayResult, NarrativeSnapshot } from '@/lib/simulation/types';
 import { FieldSurface } from './field/field-surface';
 import { DriveTrail } from './field/drive-trail';
-import { BallMarker } from './field/ball-marker';
 import { DownDistanceOverlay } from './field/down-distance-overlay';
 import { SnakeTrail } from './field/snake-trail';
 import { PlayersOverlay } from './field/players-overlay';
@@ -198,9 +197,6 @@ export function FieldVisual({
   const showOverlays = playPhase === 'idle' || playPhase === 'pre_snap' || playPhase === 'post_play';
   const isRedZone = ballPosition <= 20;
   const isGoalLine = ballPosition <= 5;
-  const ballDirection = lastPlay
-    ? (lastPlay.yardsGained >= 0 ? (possession === 'away' ? 'right' : 'left') : (possession === 'away' ? 'left' : 'right'))
-    : null;
   const showDriveTrail = gameStatus === 'live' && !isKickoff && !isPatAttempt;
 
   return (
@@ -230,14 +226,6 @@ export function FieldVisual({
           ballPercent={ballLeft}
           teamColor={possessingTeam.primaryColor}
           visible={showDriveTrail}
-        />
-
-        {/* z-5: Ball marker (gold dot at LOS between plays) */}
-        <BallMarker
-          leftPercent={ballLeft}
-          direction={ballDirection}
-          isKicking={isKickoff}
-          hidden={isPlayAnimating}
         />
 
         {/* z-6: Down & distance overlay (LOS, FD line, badge) */}

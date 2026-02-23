@@ -921,7 +921,7 @@ export function PlayersOverlay({
         const role = pos.role || 'OFF';
         const isOL = role === 'C' || role === 'LG' || role === 'RG' || role === 'LT' || role === 'RT';
         const isSkill = role === 'WR' || role === 'TE' || role === 'RB' || role === 'FB';
-        const dotSize = isOL ? 11 : isSkill ? 9 : (role === 'QB' ? 10 : 9);
+        const dotSize = isOL ? 18 : isSkill ? 14 : (role === 'QB' ? 16 : 14);
         // Stagger: OL moves first (0ms), QB next (80ms), skill last (150ms)
         const staggerDelay = phase === 'pre_snap' ? (isOL ? '0ms' : role === 'QB' ? '80ms' : '150ms') : '0ms';
         return (
@@ -942,13 +942,13 @@ export function PlayersOverlay({
               className="carrier-logo logo-carrier-glow"
               style={{
                 display: showLogo && logoUrl ? 'block' : 'none',
-                width: 26,
-                height: 26,
+                width: 40,
+                height: 40,
                 borderRadius: '50%',
                 overflow: 'hidden',
                 backgroundColor: '#1a1a2e',
-                border: `2px solid ${borderColor}`,
-                boxShadow: `0 0 10px ${borderColor}50, 0 2px 6px rgba(0,0,0,0.5)`,
+                border: `2.5px solid ${borderColor}`,
+                boxShadow: `0 0 14px ${borderColor}50, 0 2px 8px rgba(0,0,0,0.5)`,
               }}
             >
               {logoUrl && (
@@ -956,10 +956,10 @@ export function PlayersOverlay({
                   src={logoUrl}
                   alt=""
                   style={{
-                    width: 18,
-                    height: 18,
+                    width: 28,
+                    height: 28,
                     objectFit: 'contain',
-                    margin: '2px auto',
+                    margin: '4px auto',
                     display: 'block',
                   }}
                   draggable={false}
@@ -971,8 +971,8 @@ export function PlayersOverlay({
               className={`carrier-dot ${isOL ? 'rounded-sm' : 'rounded-full'} ${isCarrier && !showLogo ? 'player-carrier-pulse' : ''}`}
               style={{
                 display: showLogo && logoUrl ? 'none' : 'block',
-                width: isCarrier ? 14 : dotSize,
-                height: isCarrier ? 14 : dotSize,
+                width: isCarrier ? 22 : dotSize,
+                height: isCarrier ? 22 : dotSize,
                 backgroundColor: offenseColor,
                 opacity: isCarrier ? 1.0 : 0.8,
                 border: isOL ? `1px solid rgba(255,255,255,0.3)` : 'none',
@@ -1014,7 +1014,7 @@ export function PlayersOverlay({
         const isDL = role === 'DE' || role === 'DT' || role === 'NT';
         const isDB = role === 'CB' || role === 'NCB' || role === 'S';
         const isKR = role === 'KR';
-        const dotSize = isDL ? 11 : isDB ? 9 : 10;
+        const dotSize = isDL ? 18 : isDB ? 14 : 16;
         // For kickoff returns: KR gets carrier logo after ball lands
         const isKRCarrier = cs.carrierMode === 'kickoff_return' && i === cs.receiverIdx && carrierTransferredRef.current;
         const showKRLogo = isKRCarrier && (phase === 'development' || phase === 'result');
@@ -1041,13 +1041,13 @@ export function PlayersOverlay({
                 className="carrier-logo logo-carrier-glow"
                 style={{
                   display: showKRLogo ? 'block' : 'none',
-                  width: 26,
-                  height: 26,
+                  width: 40,
+                  height: 40,
                   borderRadius: '50%',
                   overflow: 'hidden',
                   backgroundColor: '#1a1a2e',
-                  border: `2px solid ${defenseColor}`,
-                  boxShadow: `0 0 10px ${defenseColor}50, 0 2px 6px rgba(0,0,0,0.5)`,
+                  border: `2.5px solid ${defenseColor}`,
+                  boxShadow: `0 0 14px ${defenseColor}50, 0 2px 8px rgba(0,0,0,0.5)`,
                 }}
               >
                 {krLogoUrl ? (
@@ -1055,10 +1055,10 @@ export function PlayersOverlay({
                     src={krLogoUrl}
                     alt=""
                     style={{
-                      width: 18,
-                      height: 18,
+                      width: 28,
+                      height: 28,
                       objectFit: 'contain',
-                      margin: '2px auto',
+                      margin: '4px auto',
                       display: 'block',
                     }}
                     draggable={false}
@@ -1066,9 +1066,9 @@ export function PlayersOverlay({
                 ) : (
                   <div
                     style={{
-                      width: 18,
-                      height: 18,
-                      margin: '2px auto',
+                      width: 28,
+                      height: 28,
+                      margin: '4px auto',
                       borderRadius: '50%',
                       backgroundColor: defenseColor,
                       opacity: 0.9,
@@ -1082,8 +1082,8 @@ export function PlayersOverlay({
               className={`carrier-dot ${isDL ? 'rounded-sm' : 'rounded-full'} ${isKRCarrier && !showKRLogo ? 'player-carrier-pulse' : ''}`}
               style={{
                 display: showKRLogo ? 'none' : 'block',
-                width: isKRCarrier ? 14 : dotSize,
-                height: isKRCarrier ? 14 : dotSize,
+                width: isKRCarrier ? 22 : dotSize,
+                height: isKRCarrier ? 22 : dotSize,
                 backgroundColor: defenseColor,
                 opacity: isKRCarrier ? 1.0 : 0.85,
                 border: isDL ? '1px solid rgba(255,255,255,0.3)' : 'none',
