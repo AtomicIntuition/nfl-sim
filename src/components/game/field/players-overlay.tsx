@@ -943,7 +943,7 @@ export function PlayersOverlay({
               left: `${pos.x}%`,
               top: `${pos.y}%`,
               transform: 'translate(-50%, -50%)',
-              zIndex: showLogo ? 20 : (isQB ? 10 : 3),
+              zIndex: showLogo ? 20 : (isCarrier || isQB ? 10 : 3),
               transition: transitionStyle,
               transitionDelay: staggerDelay,
             }}
