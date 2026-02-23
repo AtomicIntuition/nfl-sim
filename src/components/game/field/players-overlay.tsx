@@ -916,9 +916,8 @@ export function PlayersOverlay({
   // offDir=-1 → QB drops left (offense attacks RIGHT) → facemask faces right
   const offFacingLeft = offDir === 1;
   const defFacingLeft = offDir === -1;
-  // Team logos on helmets (small ESPN logos)
-  const offHelmetLogoUrl = teamAbbreviation ? getTeamLogoUrl(teamAbbreviation, 100) : null;
-  const defHelmetLogoUrl = opposingTeamAbbreviation ? getTeamLogoUrl(opposingTeamAbbreviation, 100) : null;
+  const offSecondary = offenseSecondaryColor || '#ffffff';
+  const defSecondary = defenseSecondaryColor || '#ffffff';
 
   return (
     <div
@@ -978,14 +977,14 @@ export function PlayersOverlay({
                 />
               )}
             </div>
-            {/* Football helmet — layered: color fill + logo + outline */}
-            <div
+            {/* SVG football helmet */}
+            <svg
               className={`carrier-dot ${isCarrier && !showLogo ? 'player-carrier-pulse' : ''}`}
+              viewBox="0 0 28 20"
+              width={helmetW}
+              height={helmetH}
               style={{
                 display: showLogo && logoUrl ? 'none' : 'block',
-                width: helmetW,
-                height: helmetH,
-                position: 'relative',
                 transform: offFacingLeft ? 'scaleX(-1)' : 'none',
                 filter: isCarrier
                   ? `drop-shadow(0 0 6px ${offenseColor})`
@@ -993,46 +992,16 @@ export function PlayersOverlay({
                 opacity: isCarrier ? 1.0 : 0.85,
               }}
             >
-              {/* Base: team color fill */}
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundColor: offenseColor,
-                borderRadius: '45% 20% 20% 40%',
-              }} />
-              {/* Team logo — big and visible */}
-              {offHelmetLogoUrl && (
-                <img
-                  src={offHelmetLogoUrl}
-                  alt=""
-                  draggable={false}
-                  style={{
-                    position: 'absolute',
-                    width: '70%',
-                    height: '70%',
-                    top: '15%',
-                    left: '12%',
-                    objectFit: 'contain',
-                    opacity: 0.85,
-                    transform: offFacingLeft ? 'scaleX(-1)' : 'none',
-                  }}
-                />
-              )}
-              {/* Helmet outline SVG on top */}
-              <img
-                src="/football_helmet_outline.svg"
-                alt=""
-                draggable={false}
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  opacity: 0.4,
-                }}
-              />
-            </div>
+              {/* Helmet shell */}
+              <path d="M3,2 C1,3 0,6 0,10 C0,14 1,17 3,18 L17,18 C20,17 22,14 22,12 L22,8 C22,6 20,3 17,2 Z" fill={offenseColor} />
+              {/* Facemask */}
+              <rect x="19" y="5" width="7" height="10" rx="1.5" fill="rgba(60,60,60,0.8)" />
+              <line x1="19.5" y1="7.5" x2="26" y2="7.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <line x1="19.5" y1="10" x2="26" y2="10" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <line x1="19.5" y1="12.5" x2="26" y2="12.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              {/* Center stripe */}
+              <path d="M2,10 C6,3 16,3 21,8" stroke={offSecondary} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+            </svg>
           </div>
         );
       })}
@@ -1128,14 +1097,14 @@ export function PlayersOverlay({
                 )}
               </div>
             )}
-            {/* Football helmet — layered: color fill + logo + outline */}
-            <div
+            {/* SVG football helmet — facing toward offense */}
+            <svg
               className={`carrier-dot ${isKRCarrier && !showKRLogo ? 'player-carrier-pulse' : ''}`}
+              viewBox="0 0 28 20"
+              width={isKRCarrier ? 38 : helmetW}
+              height={isKRCarrier ? 36 : helmetH}
               style={{
                 display: showKRLogo ? 'none' : 'block',
-                width: isKRCarrier ? 38 : helmetW,
-                height: isKRCarrier ? 36 : helmetH,
-                position: 'relative',
                 transform: defFacingLeft ? 'scaleX(-1)' : 'none',
                 filter: isKRCarrier
                   ? `drop-shadow(0 0 6px ${defenseColor})`
@@ -1143,46 +1112,13 @@ export function PlayersOverlay({
                 opacity: isKRCarrier ? 1.0 : 0.85,
               }}
             >
-              {/* Base: team color fill */}
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundColor: defenseColor,
-                borderRadius: '45% 20% 20% 40%',
-              }} />
-              {/* Team logo — big and visible */}
-              {defHelmetLogoUrl && (
-                <img
-                  src={defHelmetLogoUrl}
-                  alt=""
-                  draggable={false}
-                  style={{
-                    position: 'absolute',
-                    width: '70%',
-                    height: '70%',
-                    top: '15%',
-                    left: '12%',
-                    objectFit: 'contain',
-                    opacity: 0.85,
-                    transform: defFacingLeft ? 'scaleX(-1)' : 'none',
-                  }}
-                />
-              )}
-              {/* Helmet outline SVG on top */}
-              <img
-                src="/football_helmet_outline.svg"
-                alt=""
-                draggable={false}
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  opacity: 0.4,
-                }}
-              />
-            </div>
+              <path d="M3,2 C1,3 0,6 0,10 C0,14 1,17 3,18 L17,18 C20,17 22,14 22,12 L22,8 C22,6 20,3 17,2 Z" fill={defenseColor} />
+              <rect x="19" y="5" width="7" height="10" rx="1.5" fill="rgba(60,60,60,0.8)" />
+              <line x1="19.5" y1="7.5" x2="26" y2="7.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <line x1="19.5" y1="10" x2="26" y2="10" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <line x1="19.5" y1="12.5" x2="26" y2="12.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <path d="M2,10 C6,3 16,3 21,8" stroke={defSecondary} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+            </svg>
           </div>
         );
       })}
