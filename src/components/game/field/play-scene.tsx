@@ -75,23 +75,45 @@ function LogoImg({
 }: {
   src: string; size: number; flip?: boolean; playKey?: number; opacity?: number;
 }) {
-  const [failed, setFailed] = useState(false);
-  // Reset fallback state when playKey changes so the logo gets retried
+  const [retryCount, setRetryCount] = useState(0);
+  const [exhausted, setExhausted] = useState(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const MAX_RETRIES = 2;
+
+  // Reset retry state when playKey changes so the logo gets fresh retries
   const prevKeyRef = useRef(playKey);
   if (playKey !== prevKeyRef.current) {
     prevKeyRef.current = playKey;
-    if (failed) setFailed(false);
+    if (exhausted) { setExhausted(false); setRetryCount(0); }
   }
 
-  if (failed) {
+  // Cleanup timer on unmount
+  useEffect(() => () => { clearTimeout(retryTimerRef.current); }, []);
+
+  if (exhausted) {
     return (
       <span style={{ fontSize: size * 0.7, lineHeight: '1', opacity }}>{'\u{1F3C8}'}</span>
     );
   }
 
+  const handleError = () => {
+    if (retryCount < MAX_RETRIES) {
+      // Delay retry to let Safari CORS/cache settle
+      retryTimerRef.current = setTimeout(() => {
+        setRetryCount((c) => c + 1);
+      }, 500);
+    } else {
+      setExhausted(true);
+    }
+  };
+
+  // Cache-busting param on retries to bypass cached failures
+  const imgSrc = retryCount > 0 ? `${src}${src.includes('?') ? '&' : '?'}r=${retryCount}` : src;
+
   return (
     <img
-      src={src}
+      key={retryCount}
+      src={imgSrc}
       alt=""
       width={size}
       height={size}
@@ -103,7 +125,7 @@ function LogoImg({
         opacity,
       }}
       draggable={false}
-      onError={() => setFailed(true)}
+      onError={handleError}
     />
   );
 }
@@ -134,6 +156,7 @@ export function PlayScene({
   const animFrameRef = useRef(0);
   const [animProgress, setAnimProgress] = useState(0);
   const [ballX, setBallX] = useState(ballLeftPercent);
+  const [qbX, setQbX] = useState(ballLeftPercent);
 
   const fromToRef = useRef({ from: prevBallLeftPercent, to: ballLeftPercent });
 
@@ -181,6 +204,7 @@ export function PlayScene({
     onAnimatingRef.current(true);
     updatePhase('pre_snap');
     setBallX(fromX);
+    setQbX(fromX);
     setAnimProgress(0);
 
     const t1 = setTimeout(() => updatePhase('snap'), preMs);
@@ -191,7 +215,13 @@ export function PlayScene({
     const t3 = setTimeout(() => {
       updatePhase('result');
       cancelAnimationFrame(animFrameRef.current);
-      setBallX(toX);
+      if (isSplitPlay(lastPlay.type)) {
+        setBallX(calculateBallPosition(lastPlay, fromX, toX, 1, possession));
+        setQbX(calculateQBPosition(lastPlay, fromX, toX, 1, possession));
+      } else {
+        setBallX(toX);
+        setQbX(toX);
+      }
       setAnimProgress(1);
     }, preMs + snapMs + devMs);
     const t4 = setTimeout(() => updatePhase('post_play'), preMs + snapMs + devMs + resMs);
@@ -210,11 +240,19 @@ export function PlayScene({
 
   // ── RAF loop ───────────────────────────────────────────────
   function startRaf(fromX: number, toX: number, play: PlayResult, durationMs: number) {
+    const split = isSplitPlay(play.type);
     const startTime = performance.now();
     function tick(now: number) {
       const t = Math.min((now - startTime) / durationMs, 1);
       setAnimProgress(t);
-      setBallX(calculateSimpleBallX(play, fromX, toX, t, possession));
+      if (split) {
+        setBallX(calculateBallPosition(play, fromX, toX, t, possession));
+        setQbX(calculateQBPosition(play, fromX, toX, t, possession));
+      } else {
+        const x = calculateSimpleBallX(play, fromX, toX, t, possession);
+        setBallX(x);
+        setQbX(x);
+      }
       if (t < 1) animFrameRef.current = requestAnimationFrame(tick);
     }
     animFrameRef.current = requestAnimationFrame(tick);
@@ -246,10 +284,13 @@ export function PlayScene({
 
   // ── Logo Ball is ALWAYS visible ────────────────────────────
   // During idle: shows at ball position with gentle breathe animation
-  // During play: animates along straight line (except kickoffs → KickoffScene)
+  // During play: QB logo follows qbX, traveling ball follows ballX
 
-  const displayX = isPlaying ? ballX : ballLeftPercent;
+  const displayQbX = isPlaying ? qbX : ballLeftPercent;
+  const displayBallX = isPlaying ? ballX : ballLeftPercent;
   const isKickoffPlay = playType === 'kickoff';
+  const split = isSplitPlay(playType ?? undefined);
+  const showBallDot = isPlaying && split && (inDev || inResult) && showTravelingBall(playType ?? undefined, animProgress, lastPlay);
 
   // ── Kickoff scene data ──────────────────────────────────────
   // IMPORTANT: gameState is captured AFTER the kickoff is resolved, so
@@ -272,7 +313,7 @@ export function PlayScene({
         <>
           {[0.06, 0.12, 0.18, 0.24, 0.30, 0.36].map((offset, i) => {
             const trailT = Math.max(0, animProgress - offset);
-            const trailX = calculateSimpleBallX(lastPlay!, fromToRef.current.from, fromToRef.current.to, trailT, possession);
+            const trailX = calculateBallPosition(lastPlay!, fromToRef.current.from, fromToRef.current.to, trailT, possession);
             return (
               <div
                 key={i}
@@ -328,13 +369,13 @@ export function PlayScene({
 
       {/* ─── Deep Pass Spiral Lines ─── */}
       {isPlaying && inDev && isDeepPass && animProgress > 0.3 && (
-        <SpiralLines x={displayX} />
+        <SpiralLines x={displayBallX} />
       )}
 
       {/* ─── Kick Altitude Ghost (non-kickoff kicks only) ─── */}
       {isPlaying && inDev && isKick && !isKickoffPlay && (
         <KickAltitudeGhost
-          x={displayX}
+          x={displayBallX}
           progress={animProgress}
           logoUrl={getTeamLogoUrl(activeLogo, 100)}
           borderColor={activeColor}
@@ -364,13 +405,61 @@ export function PlayScene({
         />
       )}
 
+      {/* ─── Scrimmage Travel Line ─── */}
+      {isPlaying && (inDev || inResult) && !isKickoffPlay && split && (
+        (() => {
+          const from = fromToRef.current.from;
+          const to = fromToRef.current.to;
+          const lineLeft = Math.min(from, to);
+          const lineWidth = Math.abs(to - from);
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                left: `${lineLeft}%`,
+                width: `${lineWidth}%`,
+                top: '50%',
+                height: 0,
+                borderTop: '1.5px dashed rgba(255, 255, 255, 0.12)',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            />
+          );
+        })()
+      )}
+
+      {/* ─── Traveling Ball Dot (golden circle, separates from QB) ─── */}
+      {showBallDot && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${clamp(displayBallX, 2, 98)}%`,
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 21,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              backgroundColor: '#d4af37',
+              boxShadow: '0 0 8px #d4af3780, 0 0 16px #d4af3740',
+            }}
+          />
+        </div>
+      )}
+
       {/* ─── Logo Ball (hidden during kickoff animation) ─── */}
       {!(isKickoffPlay && isPlaying) && (
         <div
           className={!isPlaying ? 'logo-ball-breathe' : ''}
           style={{
             position: 'absolute',
-            left: `${clamp(displayX, 2, 98)}%`,
+            left: `${clamp(displayQbX, 2, 98)}%`,
             top: '50%',
             transform: 'translate(-50%, -50%)',
             zIndex: 20,
@@ -563,6 +652,150 @@ function calculateSimpleBallX(
     default:
       return fromX + (toX - fromX) * easeOutCubic(t);
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// QB POSITION (where team logo stays) — split plays only
+// ══════════════════════════════════════════════════════════════
+
+function calculateQBPosition(
+  play: PlayResult, fromX: number, toX: number, t: number,
+  possession: 'home' | 'away',
+): number {
+  const offDir = possession === 'away' ? -1 : 1;
+
+  switch (play.type) {
+    case 'run': case 'two_point': {
+      // Slight backward motion during handoff, then return to LOS and stay
+      if (t < 0.1) {
+        const dropT = t / 0.1;
+        return fromX + offDir * YARDS.SHORT_DROP * 0.3 * easeOutCubic(dropT);
+      }
+      if (t < 0.2) {
+        const returnT = (t - 0.1) / 0.1;
+        return fromX + offDir * YARDS.SHORT_DROP * 0.3 * (1 - easeOutCubic(returnT));
+      }
+      return fromX;
+    }
+    case 'scramble': {
+      // QB carries the ball — same as current run behavior
+      if (t < 0.1) return fromX;
+      const runT = (t - 0.1) / 0.9;
+      return fromX + (toX - fromX) * easeOutCubic(runT);
+    }
+    case 'pass_complete': {
+      // Dropback, then stay in pocket
+      const isPA = play.call === 'play_action_short' || play.call === 'play_action_deep';
+      const holdEnd = isPA ? 0.4 : 0.3;
+      if (t < holdEnd) {
+        const dropT = t / holdEnd;
+        return fromX + offDir * YARDS.SHORT_DROP * easeOutCubic(dropT);
+      }
+      return fromX + offDir * YARDS.SHORT_DROP;
+    }
+    case 'pass_incomplete': {
+      const holdEnd = 0.35;
+      if (t < holdEnd) {
+        const dropT = t / holdEnd;
+        return fromX + offDir * YARDS.SHORT_DROP * easeOutCubic(dropT);
+      }
+      return fromX + offDir * YARDS.SHORT_DROP;
+    }
+    case 'sack': {
+      // Dropback then driven back to toX
+      if (t < 0.3) {
+        return fromX + offDir * YARDS.SHORT_DROP * easeOutCubic(t / 0.3);
+      }
+      const sackT = (t - 0.3) / 0.7;
+      const qbX = fromX + offDir * YARDS.SHORT_DROP;
+      return qbX + (toX - qbX) * easeOutCubic(sackT);
+    }
+    default:
+      return calculateSimpleBallX(play, fromX, toX, t, possession);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BALL POSITION (where the golden ball dot goes) — split plays
+// ══════════════════════════════════════════════════════════════
+
+function calculateBallPosition(
+  play: PlayResult, fromX: number, toX: number, t: number,
+  possession: 'home' | 'away',
+): number {
+  const offDir = possession === 'away' ? -1 : 1;
+
+  switch (play.type) {
+    case 'run': case 'two_point': {
+      // Stays at LOS during handoff, then moves to toX
+      if (t < 0.1) return fromX;
+      const runT = (t - 0.1) / 0.9;
+      return fromX + (toX - fromX) * easeOutCubic(runT);
+    }
+    case 'scramble': {
+      // Tracks QB (QB carries ball)
+      if (t < 0.1) return fromX;
+      const runT = (t - 0.1) / 0.9;
+      return fromX + (toX - fromX) * easeOutCubic(runT);
+    }
+    case 'pass_complete': {
+      // Tracks QB during dropback, then flies from QB to catch point
+      const isPA = play.call === 'play_action_short' || play.call === 'play_action_deep';
+      const holdEnd = isPA ? 0.4 : 0.3;
+      const throwEnd = 0.8;
+      if (t < holdEnd) {
+        const dropT = t / holdEnd;
+        return fromX + offDir * YARDS.SHORT_DROP * easeOutCubic(dropT);
+      }
+      if (t < throwEnd) {
+        const throwT = (t - holdEnd) / (throwEnd - holdEnd);
+        const qbX = fromX + offDir * YARDS.SHORT_DROP;
+        return qbX + (toX - qbX) * easeInOutQuad(throwT);
+      }
+      return toX;
+    }
+    case 'pass_incomplete': {
+      const holdEnd = 0.35;
+      if (t < holdEnd) {
+        const dropT = t / holdEnd;
+        return fromX + offDir * YARDS.SHORT_DROP * easeOutCubic(dropT);
+      }
+      const throwT = (t - holdEnd) / (1 - holdEnd);
+      const qbX = fromX + offDir * YARDS.SHORT_DROP;
+      const targetX = fromX - offDir * yardsToPercent(12);
+      return qbX + (targetX - qbX) * easeInOutQuad(throwT);
+    }
+    case 'sack': {
+      // Ball tracks QB exactly
+      if (t < 0.3) {
+        return fromX + offDir * YARDS.SHORT_DROP * easeOutCubic(t / 0.3);
+      }
+      const sackT = (t - 0.3) / 0.7;
+      const qbX = fromX + offDir * YARDS.SHORT_DROP;
+      return qbX + (toX - qbX) * easeOutCubic(sackT);
+    }
+    default:
+      return calculateSimpleBallX(play, fromX, toX, t, possession);
+  }
+}
+
+/** Returns true for play types where QB and ball should be separate elements */
+function isSplitPlay(type: string | undefined): boolean {
+  return type === 'run' || type === 'pass_complete' || type === 'pass_incomplete'
+    || type === 'sack' || type === 'scramble' || type === 'two_point';
+}
+
+/** Returns true when the golden ball dot should be visible (ball separates from QB) */
+function showTravelingBall(type: string | undefined, animProgress: number, play: PlayResult | null): boolean {
+  if (!type || !play) return false;
+  if (type === 'run' || type === 'two_point') return animProgress > 0.1;
+  if (type === 'pass_complete') {
+    const isPA = play.call === 'play_action_short' || play.call === 'play_action_deep';
+    return animProgress > (isPA ? 0.4 : 0.3);
+  }
+  if (type === 'pass_incomplete') return animProgress > 0.35;
+  // scramble / sack: ball stays with QB, no separate dot
+  return false;
 }
 
 // ══════════════════════════════════════════════════════════════

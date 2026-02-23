@@ -232,7 +232,6 @@ export function FieldVisual({
   }, [lastPlay]);
 
   // ── Derived display state ─────────────────────────────
-  const showOverlays = playPhase === 'idle' || playPhase === 'pre_snap' || playPhase === 'post_play';
   const isRedZone = ballPosition <= 20;
   const isGoalLine = ballPosition <= 5;
 
@@ -261,7 +260,7 @@ export function FieldVisual({
         <WeatherOverlay weather={weather} />
 
         {/* z-6: Down & distance overlay (LOS, FD line, badge) */}
-        {showOverlays && !isKickoff && !isPatAttempt && gameStatus === 'live' && (
+        {!isKickoff && !isPatAttempt && gameStatus === 'live' && (
           <DownDistanceOverlay
             ballLeftPercent={ballLeft}
             firstDownLeftPercent={firstDownLeft}
