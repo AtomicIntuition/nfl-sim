@@ -269,9 +269,9 @@ export function GameViewer({ gameId }: GameViewerProps) {
       {/* ── Main content: scrollable on mobile, locked grid on desktop ── */}
       <div className="flex-1 min-h-0 lg:grid lg:grid-cols-5">
         {/* ═══ Left: Field + info strips (3/5 on desktop, full on mobile) ═══ */}
-        <div className="flex flex-col lg:col-span-3 lg:min-h-0">
+        <div className="flex flex-col lg:col-span-3 lg:min-h-0 lg:overflow-y-auto">
           {/* Field — fixed aspect on mobile so it's always visible */}
-          <div className="h-[180px] sm:h-[220px] lg:flex-1 lg:h-auto lg:min-h-0 lg:max-h-[45%] relative">
+          <div className="h-[180px] sm:h-[220px] lg:h-auto lg:min-h-[200px] lg:max-h-[45%] relative flex-shrink-0">
             <JumbotronOverlay />
             <FieldVisual
               ballPosition={gameState.ballPosition}
@@ -346,8 +346,8 @@ export function GameViewer({ gameId }: GameViewerProps) {
               />
             </div>
 
-            {/* Box Score — open by default on desktop for the live stats view */}
-            <div className="flex-shrink-0 border-t border-white/[0.06] lg:overflow-y-auto lg:min-h-0 lg:flex-1">
+            {/* Box Score — open by default, scrollable with the rest of the column */}
+            <div className="border-t border-white/[0.06]">
               <BoxScore
                 boxScore={activeBoxScore}
                 homeTeam={gameState.homeTeam}
