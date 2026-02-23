@@ -916,8 +916,9 @@ export function PlayersOverlay({
   // offDir=-1 → QB drops left (offense attacks RIGHT) → facemask faces right
   const offFacingLeft = offDir === 1;
   const defFacingLeft = offDir === -1;
-  const offSecondary = offenseSecondaryColor || '#ffffff';
-  const defSecondary = defenseSecondaryColor || '#ffffff';
+  // Team logos on helmets (small ESPN logos)
+  const offHelmetLogoUrl = teamAbbreviation ? getTeamLogoUrl(teamAbbreviation, 100) : null;
+  const defHelmetLogoUrl = opposingTeamAbbreviation ? getTeamLogoUrl(opposingTeamAbbreviation, 100) : null;
 
   return (
     <div
@@ -932,8 +933,8 @@ export function PlayersOverlay({
         const role = pos.role || 'OFF';
         const isOL = role === 'C' || role === 'LG' || role === 'RG' || role === 'LT' || role === 'RT';
         const isQB = role === 'QB';
-        const helmetW = isOL ? 22 : isCarrier ? 24 : (isQB ? 20 : 18);
-        const helmetH = isOL ? 18 : isCarrier ? 20 : (isQB ? 16 : 14);
+        const helmetW = isOL ? 26 : isCarrier ? 28 : (isQB ? 24 : 22);
+        const helmetH = isOL ? 20 : isCarrier ? 22 : (isQB ? 18 : 16);
         const staggerDelay = phase === 'pre_snap' ? (isOL ? '0ms' : isQB ? '80ms' : '150ms') : '0ms';
         return (
           <div
@@ -977,31 +978,48 @@ export function PlayersOverlay({
                 />
               )}
             </div>
-            {/* SVG football helmet */}
-            <svg
+            {/* Football helmet using SVG mask + team color + logo */}
+            <div
               className={`carrier-dot ${isCarrier && !showLogo ? 'player-carrier-pulse' : ''}`}
-              viewBox="0 0 28 20"
-              width={helmetW}
-              height={helmetH}
               style={{
                 display: showLogo && logoUrl ? 'none' : 'block',
+                width: helmetW,
+                height: helmetH,
+                backgroundColor: offenseColor,
+                WebkitMaskImage: 'url(/football_helmet_outline.svg)',
+                WebkitMaskSize: 'contain',
+                WebkitMaskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center',
+                maskImage: 'url(/football_helmet_outline.svg)',
+                maskSize: 'contain',
+                maskRepeat: 'no-repeat',
+                maskPosition: 'center',
                 transform: offFacingLeft ? 'scaleX(-1)' : 'none',
                 filter: isCarrier
                   ? `drop-shadow(0 0 6px ${offenseColor})`
                   : `drop-shadow(0 0 3px ${offenseColor}80)`,
                 opacity: isCarrier ? 1.0 : 0.85,
+                position: 'relative',
               }}
             >
-              {/* Helmet shell */}
-              <path d="M3,2 C1,3 0,6 0,10 C0,14 1,17 3,18 L17,18 C20,17 22,14 22,12 L22,8 C22,6 20,3 17,2 Z" fill={offenseColor} />
-              {/* Facemask */}
-              <rect x="19" y="5" width="7" height="10" rx="1.5" fill="rgba(60,60,60,0.8)" />
-              <line x1="19.5" y1="7.5" x2="26" y2="7.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
-              <line x1="19.5" y1="10" x2="26" y2="10" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
-              <line x1="19.5" y1="12.5" x2="26" y2="12.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
-              {/* Center stripe */}
-              <path d="M2,10 C6,3 16,3 21,8" stroke={offSecondary} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-            </svg>
+              {offHelmetLogoUrl && (
+                <img
+                  src={offHelmetLogoUrl}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    position: 'absolute',
+                    width: '60%',
+                    height: '60%',
+                    top: '15%',
+                    left: '18%',
+                    objectFit: 'contain',
+                    opacity: 0.7,
+                    transform: offFacingLeft ? 'scaleX(-1)' : 'none',
+                  }}
+                />
+              )}
+            </div>
           </div>
         );
       })}
@@ -1035,8 +1053,8 @@ export function PlayersOverlay({
         const isDL = role === 'DE' || role === 'DT' || role === 'NT';
         const isDB = role === 'CB' || role === 'NCB' || role === 'S';
         const isKR = role === 'KR';
-        const helmetW = isDL ? 22 : isDB ? 16 : 18;
-        const helmetH = isDL ? 18 : isDB ? 13 : 15;
+        const helmetW = isDL ? 26 : isDB ? 20 : 22;
+        const helmetH = isDL ? 20 : isDB ? 16 : 18;
         const isKRCarrier = cs.carrierMode === 'kickoff_return' && i === cs.receiverIdx && carrierTransferredRef.current;
         const showKRLogo = isKRCarrier && (phase === 'development' || phase === 'result');
         const krLogoUrl = isKR && cs.carrierMode === 'kickoff_return' && opposingTeamAbbreviation
@@ -1097,28 +1115,48 @@ export function PlayersOverlay({
                 )}
               </div>
             )}
-            {/* SVG football helmet — facing toward offense */}
-            <svg
+            {/* Football helmet using SVG mask + team color + logo */}
+            <div
               className={`carrier-dot ${isKRCarrier && !showKRLogo ? 'player-carrier-pulse' : ''}`}
-              viewBox="0 0 28 20"
-              width={isKRCarrier ? 24 : helmetW}
-              height={isKRCarrier ? 20 : helmetH}
               style={{
                 display: showKRLogo ? 'none' : 'block',
+                width: isKRCarrier ? 28 : helmetW,
+                height: isKRCarrier ? 22 : helmetH,
+                backgroundColor: defenseColor,
+                WebkitMaskImage: 'url(/football_helmet_outline.svg)',
+                WebkitMaskSize: 'contain',
+                WebkitMaskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center',
+                maskImage: 'url(/football_helmet_outline.svg)',
+                maskSize: 'contain',
+                maskRepeat: 'no-repeat',
+                maskPosition: 'center',
                 transform: defFacingLeft ? 'scaleX(-1)' : 'none',
                 filter: isKRCarrier
                   ? `drop-shadow(0 0 6px ${defenseColor})`
                   : `drop-shadow(0 0 3px ${defenseColor}80)`,
                 opacity: isKRCarrier ? 1.0 : 0.85,
+                position: 'relative',
               }}
             >
-              <path d="M3,2 C1,3 0,6 0,10 C0,14 1,17 3,18 L17,18 C20,17 22,14 22,12 L22,8 C22,6 20,3 17,2 Z" fill={defenseColor} />
-              <rect x="19" y="5" width="7" height="10" rx="1.5" fill="rgba(60,60,60,0.8)" />
-              <line x1="19.5" y1="7.5" x2="26" y2="7.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
-              <line x1="19.5" y1="10" x2="26" y2="10" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
-              <line x1="19.5" y1="12.5" x2="26" y2="12.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
-              <path d="M2,10 C6,3 16,3 21,8" stroke={defSecondary} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-            </svg>
+              {defHelmetLogoUrl && (
+                <img
+                  src={defHelmetLogoUrl}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    position: 'absolute',
+                    width: '60%',
+                    height: '60%',
+                    top: '15%',
+                    left: '18%',
+                    objectFit: 'contain',
+                    opacity: 0.7,
+                    transform: defFacingLeft ? 'scaleX(-1)' : 'none',
+                  }}
+                />
+              )}
+            </div>
           </div>
         );
       })}
