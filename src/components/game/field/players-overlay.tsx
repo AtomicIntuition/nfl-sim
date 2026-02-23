@@ -877,7 +877,7 @@ export function PlayersOverlay({
               logo.style.display = 'block';
               dot.style.display = 'none';
               // Make KR dot larger
-              el.style.zIndex = '6';
+              el.style.zIndex = '20';
             } else {
               logo.style.display = 'none';
               dot.style.display = 'block';
@@ -932,7 +932,7 @@ export function PlayersOverlay({
               left: `${pos.x}%`,
               top: `${pos.y}%`,
               transform: 'translate(-50%, -50%)',
-              zIndex: showLogo ? 6 : 3,
+              zIndex: showLogo ? 20 : 3,
               transition: transitionStyle,
               transitionDelay: staggerDelay,
             }}
@@ -1031,7 +1031,7 @@ export function PlayersOverlay({
               left: `${pos.x}%`,
               top: `${pos.y}%`,
               transform: 'translate(-50%, -50%)',
-              zIndex: showKRLogo ? 6 : 3,
+              zIndex: showKRLogo ? 20 : 3,
               transition: transitionStyle,
             }}
           >

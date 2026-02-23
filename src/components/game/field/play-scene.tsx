@@ -385,8 +385,8 @@ export function PlayScene({
               : Math.min((animProgress - holdEnd) / flightDuration, 1);
 
             // Ball size — deep passes are larger
-            const ballW = isDeepPass ? 52 : 44;
-            const ballH = isDeepPass ? 34 : 28;
+            const ballW = isDeepPass ? 72 : 60;
+            const ballH = isDeepPass ? 46 : 38;
 
             // Spiral rotation
             const spiralDeg = flightT * 720;
@@ -506,8 +506,8 @@ export function PlayScene({
             >
               <div
                 style={{
-                  width: 22,
-                  height: 14,
+                  width: 36,
+                  height: 22,
                   borderRadius: '50%',
                   background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
                   border: '1px solid #5C2D06',
@@ -558,8 +558,8 @@ export function PlayScene({
               {/* 3D Football */}
               <div
                 style={{
-                  width: 60,
-                  height: 38,
+                  width: 80,
+                  height: 50,
                   transformStyle: 'preserve-3d',
                   transform: `scale(${scale}) rotateY(${spiralDeg}deg) rotateX(15deg)`,
                   opacity,
@@ -640,8 +640,8 @@ export function PlayScene({
             >
               <div
                 style={{
-                  width: 22,
-                  height: 14,
+                  width: 36,
+                  height: 22,
                   borderRadius: '50%',
                   background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
                   border: '1px solid #5C2D06',
@@ -667,8 +667,8 @@ export function PlayScene({
           >
             <div
               style={{
-                width: 14,
-                height: 9,
+                width: 32,
+                height: 20,
                 borderRadius: '50%',
                 background: 'linear-gradient(135deg, #A0522D 0%, #8B4513 50%, #6B3410 100%)',
                 border: '1px solid #5C2D06',

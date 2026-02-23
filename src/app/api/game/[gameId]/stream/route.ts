@@ -221,8 +221,8 @@ export async function GET(
               delayMs = Math.max(0, event.displayTimestamp - lastTimestamp);
             }
 
-            // Cap at 2 minutes — safety net only; real-time pacing uses 30-40s delays
-            delayMs = Math.min(delayMs, 120_000);
+            // Hard cap: max 2s between events for non-stop pacing
+            delayMs = Math.min(delayMs, 2_000);
 
             if (delayMs > 0) {
               const alive = await sleep(delayMs);
