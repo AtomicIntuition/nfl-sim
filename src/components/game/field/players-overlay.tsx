@@ -912,10 +912,10 @@ export function PlayersOverlay({
   const cs = carrierStateRef.current;
 
   // Helmet direction: facemask faces toward the opponent
-  // offDir=1 → offense attacks right → helmet faces right
-  // offDir=-1 → offense attacks left → helmet faces left
-  const offFacingLeft = offDir === -1;
-  const defFacingLeft = offDir === 1;
+  // offDir=1 → QB drops right (offense attacks LEFT) → facemask faces left
+  // offDir=-1 → QB drops left (offense attacks RIGHT) → facemask faces right
+  const offFacingLeft = offDir === 1;
+  const defFacingLeft = offDir === -1;
   const offSecondary = offenseSecondaryColor || '#ffffff';
   const defSecondary = defenseSecondaryColor || '#ffffff';
 
@@ -980,7 +980,7 @@ export function PlayersOverlay({
             {/* SVG football helmet */}
             <svg
               className={`carrier-dot ${isCarrier && !showLogo ? 'player-carrier-pulse' : ''}`}
-              viewBox="0 0 24 20"
+              viewBox="0 0 28 20"
               width={helmetW}
               height={helmetH}
               style={{
@@ -995,10 +995,10 @@ export function PlayersOverlay({
               {/* Helmet shell */}
               <path d="M3,2 C1,3 0,6 0,10 C0,14 1,17 3,18 L17,18 C20,17 22,14 22,12 L22,8 C22,6 20,3 17,2 Z" fill={offenseColor} />
               {/* Facemask */}
-              <rect x="20" y="6" width="4" height="8" rx="1" fill="rgba(80,80,80,0.7)" />
-              <line x1="20.5" y1="8" x2="24" y2="8" stroke="rgba(180,180,180,0.6)" strokeWidth="0.8" />
-              <line x1="20.5" y1="10" x2="24" y2="10" stroke="rgba(180,180,180,0.6)" strokeWidth="0.8" />
-              <line x1="20.5" y1="12" x2="24" y2="12" stroke="rgba(180,180,180,0.6)" strokeWidth="0.8" />
+              <rect x="19" y="5" width="7" height="10" rx="1.5" fill="rgba(60,60,60,0.8)" />
+              <line x1="19.5" y1="7.5" x2="26" y2="7.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <line x1="19.5" y1="10" x2="26" y2="10" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <line x1="19.5" y1="12.5" x2="26" y2="12.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
               {/* Center stripe */}
               <path d="M2,10 C6,3 16,3 21,8" stroke={offSecondary} strokeWidth="2.5" fill="none" strokeLinecap="round" />
             </svg>
@@ -1100,7 +1100,7 @@ export function PlayersOverlay({
             {/* SVG football helmet — facing toward offense */}
             <svg
               className={`carrier-dot ${isKRCarrier && !showKRLogo ? 'player-carrier-pulse' : ''}`}
-              viewBox="0 0 24 20"
+              viewBox="0 0 28 20"
               width={isKRCarrier ? 24 : helmetW}
               height={isKRCarrier ? 20 : helmetH}
               style={{
@@ -1113,10 +1113,10 @@ export function PlayersOverlay({
               }}
             >
               <path d="M3,2 C1,3 0,6 0,10 C0,14 1,17 3,18 L17,18 C20,17 22,14 22,12 L22,8 C22,6 20,3 17,2 Z" fill={defenseColor} />
-              <rect x="20" y="6" width="4" height="8" rx="1" fill="rgba(80,80,80,0.7)" />
-              <line x1="20.5" y1="8" x2="24" y2="8" stroke="rgba(180,180,180,0.6)" strokeWidth="0.8" />
-              <line x1="20.5" y1="10" x2="24" y2="10" stroke="rgba(180,180,180,0.6)" strokeWidth="0.8" />
-              <line x1="20.5" y1="12" x2="24" y2="12" stroke="rgba(180,180,180,0.6)" strokeWidth="0.8" />
+              <rect x="19" y="5" width="7" height="10" rx="1.5" fill="rgba(60,60,60,0.8)" />
+              <line x1="19.5" y1="7.5" x2="26" y2="7.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <line x1="19.5" y1="10" x2="26" y2="10" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
+              <line x1="19.5" y1="12.5" x2="26" y2="12.5" stroke="rgba(200,200,200,0.7)" strokeWidth="1.2" />
               <path d="M2,10 C6,3 16,3 21,8" stroke={defSecondary} strokeWidth="2.5" fill="none" strokeLinecap="round" />
             </svg>
           </div>
