@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type SyntheticEvent } from 'react';
 import type { PlayResult } from '@/lib/simulation/types';
 import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 import {
@@ -348,6 +348,7 @@ export function PlayScene({
               userSelect: 'none',
             }}
             draggable={false}
+            onError={handleLogoError}
           />
         </div>
       </div>
@@ -710,6 +711,7 @@ function KickAltitudeGhost({
           height={BALL_SIZE * 0.8 - 8}
           style={{ objectFit: 'contain', opacity: 0.5 }}
           draggable={false}
+          onError={handleLogoError}
         />
       </div>
     </div>
@@ -802,6 +804,19 @@ function OutcomeMarker({
 // ══════════════════════════════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════════════════════════════
+
+/** Replace broken logo img with football emoji */
+function handleLogoError(e: SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  const parent = img.parentElement;
+  if (parent) {
+    const span = document.createElement('span');
+    span.textContent = '\u{1F3C8}';
+    span.style.fontSize = `${img.width * 0.7}px`;
+    span.style.lineHeight = '1';
+    parent.replaceChild(span, img);
+  }
+}
 
 function isFailedPlay(play: PlayResult): boolean {
   if (play.type === 'pass_incomplete') return true;

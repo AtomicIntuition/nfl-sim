@@ -10,13 +10,13 @@ interface CrowdEnergyProps {
   excitement: number;
   /** Current crowd reaction. */
   crowdReaction: CrowdReaction;
-  /** Compact mode — thin bar, no labels */
+  /** Compact mode — mid-height bar with label row */
   compact?: boolean;
 }
 
 // ── Constants ────────────────────────────────────────────────
 
-const BAR_COUNT = 24;
+const BAR_COUNT = 32;
 const ANIMATION_FPS = 30;
 const FRAME_INTERVAL = 1000 / ANIMATION_FPS;
 
@@ -100,6 +100,18 @@ function getReactionLabel(reaction: CrowdReaction): string {
   }
 }
 
+function getReactionIcon(reaction: CrowdReaction): string {
+  switch (reaction) {
+    case 'roar': return '\u{1F525}';    // fire
+    case 'cheer': return '\u{1F389}';   // party popper
+    case 'gasp': return '\u{1F62E}';    // open mouth
+    case 'groan': return '\u{1F614}';   // pensive
+    case 'murmur': return '\u{1F4AC}';  // speech bubble
+    case 'silence': return '\u{1F910}'; // zipper mouth
+    default: return '\u{1F3DF}';        // stadium
+  }
+}
+
 // ── Component ────────────────────────────────────────────────
 
 export function CrowdEnergy({ excitement, crowdReaction, compact = false }: CrowdEnergyProps) {
@@ -142,7 +154,7 @@ export function CrowdEnergy({ excitement, crowdReaction, compact = false }: Crow
       const time = timeRef.current;
 
       const barWidth = rect.width / BAR_COUNT;
-      const gap = Math.max(1, barWidth * 0.15);
+      const gap = Math.max(1, barWidth * 0.12);
       const actualBarWidth = barWidth - gap;
       const maxHeight = rect.height - 2;
 
@@ -208,6 +220,7 @@ export function CrowdEnergy({ excitement, crowdReaction, compact = false }: Crow
   }, [draw]);
 
   const reactionLabel = getReactionLabel(crowdReaction);
+  const reactionIcon = getReactionIcon(crowdReaction);
 
   // Color for the label based on excitement
   const labelColor =
@@ -221,20 +234,34 @@ export function CrowdEnergy({ excitement, crowdReaction, compact = false }: Crow
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1">
-        <span className={`text-[8px] font-black uppercase tracking-widest flex-shrink-0 ${labelColor}`}>
-          {reactionLabel}
-        </span>
-        <div className="relative flex-1 h-5 rounded overflow-hidden bg-surface-elevated/30">
+      <div className="px-3 py-1.5">
+        {/* Label row */}
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] leading-none">{reactionIcon}</span>
+            <span className={`text-[9px] font-black uppercase tracking-widest ${labelColor}`}>
+              {reactionLabel}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-semibold uppercase tracking-widest text-text-muted">
+              Energy
+            </span>
+            <span className={`text-[11px] font-mono font-black tabular-nums ${labelColor}`}>
+              {excitement}
+            </span>
+          </div>
+        </div>
+        {/* Visualizer canvas — taller for more visual impact */}
+        <div className="relative w-full h-10 sm:h-12 rounded-md overflow-hidden bg-surface-elevated/30">
           <canvas
             ref={canvasRef}
             className="w-full h-full"
             style={{ display: 'block' }}
           />
+          {/* Bottom fade */}
+          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-t from-midnight/40 to-transparent pointer-events-none" />
         </div>
-        <span className={`text-[9px] font-mono font-black tabular-nums flex-shrink-0 ${labelColor}`}>
-          {excitement}
-        </span>
       </div>
     );
   }
@@ -244,6 +271,7 @@ export function CrowdEnergy({ excitement, crowdReaction, compact = false }: Crow
       {/* Label and excitement reading */}
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
+          <span className="text-sm leading-none">{reactionIcon}</span>
           <span className={`text-[9px] font-black uppercase tracking-widest ${labelColor}`}>
             {reactionLabel}
           </span>
