@@ -314,7 +314,7 @@ export function GameViewer({ gameId }: GameViewerProps) {
         {/* ═══ Left: Field + info strips (3/5 on desktop, full on mobile) ═══ */}
         <div className="flex flex-col lg:col-span-3 lg:min-h-0">
           {/* Field — fixed aspect on mobile so it's always visible */}
-          <div className="h-[240px] sm:h-[300px] lg:flex-1 lg:h-auto lg:min-h-0 relative">
+          <div className="h-[180px] sm:h-[220px] lg:flex-1 lg:h-auto lg:min-h-0 lg:max-h-[45%] relative">
             <JumbotronOverlay />
             <FieldVisual
               ballPosition={gameState.ballPosition}
@@ -1314,7 +1314,7 @@ function ConnectingScreen() {
     <div className="min-h-dvh flex flex-col">
       {/* Field skeleton */}
       <div className="px-2 py-2">
-        <Skeleton variant="rectangular" className="w-full h-[240px] sm:h-[320px] lg:h-[400px] rounded-xl" />
+        <Skeleton variant="rectangular" className="w-full h-[180px] sm:h-[220px] lg:h-[300px] rounded-xl" />
       </div>
 
       {/* Momentum skeleton */}
