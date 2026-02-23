@@ -85,7 +85,7 @@ export function SnakeTrail({
     startTimeRef.current = performance.now();
     cellsRef.current = [];
 
-    const devDurationMs = 1800; // matches DEVELOPMENT_MS
+    const devDurationMs = 2400; // matches DEVELOPMENT_MS
 
     function tick(now: number) {
       const t = Math.min((now - startTimeRef.current) / devDurationMs, 1);

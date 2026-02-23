@@ -221,8 +221,8 @@ export async function GET(
               delayMs = Math.max(0, event.displayTimestamp - lastTimestamp);
             }
 
-            // Hard cap: max 2s between events for non-stop pacing
-            delayMs = Math.min(delayMs, 2_000);
+            // Cap at 10s — prevents old pre-simulated games from having 20s+ gaps
+            delayMs = Math.min(delayMs, 10_000);
 
             if (delayMs > 0) {
               const alive = await sleep(delayMs);
