@@ -149,47 +149,39 @@ export function FieldVisual({
     return null;
   }, [lastPlay]);
 
-  // ── Coin flip state ───────────────────────────────────
+  // ── Pregame intro + coin flip state ──────────────────
+  // Flow: pregame → show matchup intro, coin_toss → dismiss intro + show coin flip,
+  // coin flip completes → dismiss. Matchup intro re-appears at halftime only.
+  const [showMatchupIntro, setShowMatchupIntro] = useState(false);
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const coinFlipShownRef = useRef(false);
-  const [showKickoffIntro, setShowKickoffIntro] = useState(false);
-  // Track which playKey we last showed a kickoff intro for, to avoid re-triggering on the same play
-  const lastKickoffIntroPlayKeyRef = useRef(-1);
 
+  // Show matchup intro on pregame event
   useEffect(() => {
-    if (lastPlay?.type === 'coin_toss' && !coinFlipShownRef.current) {
-      setShowCoinFlip(true);
-      coinFlipShownRef.current = true;
+    if (lastPlay?.type === 'pregame' && !coinFlipShownRef.current) {
+      setShowMatchupIntro(true);
     }
   }, [lastPlay]);
 
-  // Show kickoff intro for every kickoff play (not just the opening one after coin flip)
-  const coinFlipJustCompletedRef = useRef(false);
+  // On coin toss event: dismiss matchup intro, show coin flip
   useEffect(() => {
-    if (
-      lastPlay?.type === 'kickoff' &&
-      playKey !== lastKickoffIntroPlayKeyRef.current &&
-      !coinFlipJustCompletedRef.current // Skip the opening kickoff (handled by coin flip callback)
-    ) {
-      lastKickoffIntroPlayKeyRef.current = playKey;
-      setShowKickoffIntro(true);
+    if (lastPlay?.type === 'coin_toss' && !coinFlipShownRef.current) {
+      setShowMatchupIntro(false);
+      // Brief delay before coin appears
+      const timer = setTimeout(() => {
+        setShowCoinFlip(true);
+        coinFlipShownRef.current = true;
+      }, 400);
+      return () => clearTimeout(timer);
     }
-    // Clear the coin-flip guard after the first kickoff event processes
-    if (coinFlipJustCompletedRef.current && lastPlay?.type === 'kickoff') {
-      coinFlipJustCompletedRef.current = false;
-    }
-  }, [lastPlay, playKey]);
+  }, [lastPlay]);
 
   const handleCoinFlipComplete = useCallback(() => {
     setShowCoinFlip(false);
-    coinFlipJustCompletedRef.current = true;
-    setTimeout(() => {
-      setShowKickoffIntro(true);
-    }, 500);
   }, []);
 
-  const handleKickoffIntroComplete = useCallback(() => {
-    setShowKickoffIntro(false);
+  const handleMatchupIntroComplete = useCallback(() => {
+    setShowMatchupIntro(false);
   }, []);
 
   // ── Player highlight data ─────────────────────────────
@@ -231,19 +223,39 @@ export function FieldVisual({
   }, []);
 
   // ── Delayed overlay positions (old LOS/FD during animation) ─────
-  // Track previous positions so the markers don't jump ahead of the ball animation.
-  // Updated only when playPhase transitions to idle/post_play/result (after animation ends).
-  const prevOverlayRef = useRef({ ball: ballLeft, fd: firstDownLeft });
+  // Problem: when an event arrives, gameState already has post-play positions,
+  // but PlayScene animates the ball from old→new over ~4s. We want the LOS/FD
+  // markers to stay at their OLD positions during the animation, then snap to new.
+  //
+  // Strategy: keep displayed positions in state. Always track the latest target
+  // in a ref. Only flush target → displayed when playPhase hits 'result' (or
+  // later) for the current play. Track which playKey we've committed to avoid
+  // committing during the brief idle→pre_snap gap when a new event arrives.
+  const [overlayPositions, setOverlayPositions] = useState({ ball: ballLeft, fd: firstDownLeft });
+  const targetOverlayRef = useRef({ ball: ballLeft, fd: firstDownLeft });
+  const committedPlayKeyRef = useRef(0);
 
+  // Always keep the target up to date
+  targetOverlayRef.current = { ball: ballLeft, fd: firstDownLeft };
+
+  // Commit positions when animation reaches result phase (ball has arrived)
   useEffect(() => {
-    if (playPhase === 'idle' || playPhase === 'post_play' || playPhase === 'result') {
-      prevOverlayRef.current = { ball: ballLeft, fd: firstDownLeft };
+    if (playPhase === 'result' || playPhase === 'post_play') {
+      committedPlayKeyRef.current = playKey;
+      setOverlayPositions({ ...targetOverlayRef.current });
     }
-  }, [playPhase, ballLeft, firstDownLeft]);
+  }, [playPhase, playKey]);
 
-  const isAnimatingPhase = playPhase === 'pre_snap' || playPhase === 'snap' || playPhase === 'development';
-  const overlayBallLeft = isAnimatingPhase ? prevOverlayRef.current.ball : ballLeft;
-  const overlayFirstDownLeft = isAnimatingPhase ? prevOverlayRef.current.fd : firstDownLeft;
+  // When returning to idle AFTER result (animation fully complete), also commit
+  // This handles the transition from post_play → idle for the same play
+  useEffect(() => {
+    if (playPhase === 'idle' && committedPlayKeyRef.current === playKey) {
+      setOverlayPositions({ ...targetOverlayRef.current });
+    }
+  }, [playPhase, playKey, ballLeft, firstDownLeft]);
+
+  const overlayBallLeft = overlayPositions.ball;
+  const overlayFirstDownLeft = overlayPositions.fd;
 
   // ── Big play border pulse ─────────────────────────────
   const [borderPulse, setBorderPulse] = useState(false);
@@ -351,19 +363,19 @@ export function FieldVisual({
           lastPlay={lastPlay}
         />
 
+        {/* Matchup intro overlay (pregame + halftime only) */}
+        <KickoffIntroOverlay
+          show={showMatchupIntro}
+          awayTeam={awayTeam}
+          homeTeam={homeTeam}
+          onComplete={handleMatchupIntroComplete}
+        />
+
         {/* Coin flip overlay */}
         <CoinFlip
           show={showCoinFlip}
           winningTeam={possession === 'home' ? awayTeam.abbreviation : homeTeam.abbreviation}
           onComplete={handleCoinFlipComplete}
-        />
-
-        {/* Kickoff intro overlay */}
-        <KickoffIntroOverlay
-          show={showKickoffIntro}
-          awayTeam={awayTeam}
-          homeTeam={homeTeam}
-          onComplete={handleKickoffIntroComplete}
         />
 
         {/* Celebration overlay */}

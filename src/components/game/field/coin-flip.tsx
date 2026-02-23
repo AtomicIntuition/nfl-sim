@@ -14,6 +14,8 @@ interface CoinFlipProps {
 /**
  * 3D CSS coin flip animation shown at game start.
  * Uses preserve-3d with backface-visibility for realistic flip effect.
+ * Coin has HEADS (front, with GI logo) and TAILS (back, with football).
+ * Always lands on heads (1260deg = 7 full rotations = front face up).
  */
 export function CoinFlip({ show, winningTeam, onComplete }: CoinFlipProps) {
   const [phase, setPhase] = useState<'flipping' | 'result' | 'fading' | 'done'>('flipping');
@@ -26,13 +28,13 @@ export function CoinFlip({ show, winningTeam, onComplete }: CoinFlipProps) {
 
     // Coin flips for 2.5s
     const resultTimer = setTimeout(() => setPhase('result'), 2500);
-    // Show result for 1.5s
-    const fadeTimer = setTimeout(() => setPhase('fading'), 4000);
+    // Show result for 2s
+    const fadeTimer = setTimeout(() => setPhase('fading'), 4500);
     // Complete
     const doneTimer = setTimeout(() => {
       setPhase('done');
       onComplete();
-    }, 5000);
+    }, 5500);
 
     return () => {
       clearTimeout(resultTimer);
@@ -53,6 +55,17 @@ export function CoinFlip({ show, winningTeam, onComplete }: CoinFlipProps) {
         transition: 'opacity 1s ease-out',
       }}
     >
+      {/* Label */}
+      <p
+        className="text-xs sm:text-sm font-bold tracking-[0.2em] uppercase mb-4"
+        style={{
+          color: 'rgba(212, 175, 55, 0.7)',
+          textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+        }}
+      >
+        COIN TOSS
+      </p>
+
       {/* Coin container */}
       <div
         className="coin-flip-container"
@@ -73,9 +86,9 @@ export function CoinFlip({ show, winningTeam, onComplete }: CoinFlipProps) {
               : {}),
           }}
         >
-          {/* Front face — gold "GI" logo */}
+          {/* Front face — HEADS with GI logo */}
           <div
-            className="absolute inset-0 rounded-full flex items-center justify-center"
+            className="absolute inset-0 rounded-full flex flex-col items-center justify-center"
             style={{
               backfaceVisibility: 'hidden',
               background: 'linear-gradient(135deg, #d4af37 0%, #ffd700 50%, #b8960c 100%)',
@@ -84,7 +97,7 @@ export function CoinFlip({ show, winningTeam, onComplete }: CoinFlipProps) {
             }}
           >
             <span
-              className="text-4xl font-black"
+              className="text-3xl font-black leading-none"
               style={{
                 color: '#5C3D0A',
                 textShadow: '0 1px 2px rgba(255,255,255,0.3)',
@@ -92,11 +105,17 @@ export function CoinFlip({ show, winningTeam, onComplete }: CoinFlipProps) {
             >
               GI
             </span>
+            <span
+              className="text-[9px] font-black tracking-wider mt-0.5"
+              style={{ color: '#7A5C1A' }}
+            >
+              HEADS
+            </span>
           </div>
 
-          {/* Back face — result */}
+          {/* Back face — TAILS with football icon */}
           <div
-            className="absolute inset-0 rounded-full flex items-center justify-center"
+            className="absolute inset-0 rounded-full flex flex-col items-center justify-center"
             style={{
               backfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
@@ -105,14 +124,18 @@ export function CoinFlip({ show, winningTeam, onComplete }: CoinFlipProps) {
               boxShadow: '0 0 30px rgba(212, 175, 55, 0.4), inset 0 2px 4px rgba(255,255,255,0.3)',
             }}
           >
-            <div className="text-center">
-              <span
-                className="block text-sm font-black"
-                style={{ color: '#5C3D0A' }}
-              >
-                HEADS
-              </span>
-            </div>
+            <span
+              className="text-3xl leading-none"
+              style={{ filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.2))' }}
+            >
+              🏈
+            </span>
+            <span
+              className="text-[9px] font-black tracking-wider mt-0.5"
+              style={{ color: '#7A5C1A' }}
+            >
+              TAILS
+            </span>
           </div>
         </div>
       </div>
@@ -120,13 +143,19 @@ export function CoinFlip({ show, winningTeam, onComplete }: CoinFlipProps) {
       {/* Result text */}
       {phase === 'result' && (
         <div
-          className="mt-6 text-center"
+          className="mt-5 text-center"
           style={{
             animation: 'coin-result-fade 0.6s ease-out forwards',
           }}
         >
+          <p className="text-sm sm:text-base font-bold text-white/70 mb-1">
+            It&apos;s heads!
+          </p>
           <p className="text-lg sm:text-xl font-black text-gold">
             {winningTeam} wins the toss!
+          </p>
+          <p className="text-xs sm:text-sm font-semibold text-white/50 mt-1">
+            They elect to receive
           </p>
         </div>
       )}

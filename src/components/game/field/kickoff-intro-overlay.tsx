@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getTeamLogoUrl } from '@/lib/utils/team-logos';
 
 interface KickoffIntroOverlayProps {
@@ -11,8 +11,9 @@ interface KickoffIntroOverlayProps {
 }
 
 /**
- * Pro-style matchup overlay shown between coin flip and first kickoff.
- * Displays team logos with a "VS" graphic, auto-dismisses after 4 seconds.
+ * Pro-style matchup overlay shown at game start (pregame) and halftime.
+ * Displays team logos with a "VS" graphic. Can be dismissed externally
+ * (parent sets show=false) or auto-dismisses after 6 seconds.
  */
 export function KickoffIntroOverlay({
   show,
@@ -20,32 +21,49 @@ export function KickoffIntroOverlay({
   homeTeam,
   onComplete,
 }: KickoffIntroOverlayProps) {
-  const [phase, setPhase] = useState<'entering' | 'visible' | 'fading' | 'done'>('entering');
+  const [visible, setVisible] = useState(false);
+  const [fading, setFading] = useState(false);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearTimers = () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+  };
 
   useEffect(() => {
-    if (!show) {
-      setPhase('entering');
-      return;
+    if (show && !visible && !fading) {
+      // Enter: fade in
+      setFading(false);
+      setVisible(true);
+
+      // Auto-dismiss after 6s if parent hasn't hidden us
+      const autoFade = setTimeout(() => {
+        setFading(true);
+      }, 5500);
+      const autoDone = setTimeout(() => {
+        setVisible(false);
+        setFading(false);
+        onComplete();
+      }, 6000);
+
+      timersRef.current = [autoFade, autoDone];
+    } else if (!show && visible) {
+      // Parent dismissed us: start fading
+      clearTimers();
+      setFading(true);
+      const fadeTimer = setTimeout(() => {
+        setVisible(false);
+        setFading(false);
+        onComplete();
+      }, 500);
+      timersRef.current = [fadeTimer];
     }
 
-    // Entrance animation: 300ms
-    const enterTimer = setTimeout(() => setPhase('visible'), 300);
-    // Start fading at 3.5s
-    const fadeTimer = setTimeout(() => setPhase('fading'), 3500);
-    // Complete at 4s
-    const doneTimer = setTimeout(() => {
-      setPhase('done');
-      onComplete();
-    }, 4000);
+    return () => clearTimers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
 
-    return () => {
-      clearTimeout(enterTimer);
-      clearTimeout(fadeTimer);
-      clearTimeout(doneTimer);
-    };
-  }, [show, onComplete]);
-
-  if (!show || phase === 'done') return null;
+  if (!visible) return null;
 
   return (
     <div
@@ -53,7 +71,7 @@ export function KickoffIntroOverlay({
       style={{
         background: 'rgba(0, 0, 0, 0.55)',
         backdropFilter: 'blur(6px)',
-        opacity: phase === 'fading' ? 0 : phase === 'entering' ? 0 : 1,
+        opacity: fading ? 0 : 1,
         transition: 'opacity 500ms ease-out',
       }}
     >
