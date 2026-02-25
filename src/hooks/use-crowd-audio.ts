@@ -18,12 +18,12 @@ interface CrowdAudioControls {
 }
 
 const AUDIO_FILES = {
-  ambient: "/audio/crowd-ambient.wav",
-  cheer: "/audio/crowd-roar.wav",
-  roar: "/audio/crowd-roar.wav",
-  groan: "/audio/crowd-gasp.wav",
-  gasp: "/audio/crowd-gasp.wav",
-  whistle: "/audio/whistle.wav",
+  ambient: "/audio/crowd-ambient.mp3",
+  cheer: "/audio/crowd-roar.mp3",
+  roar: "/audio/crowd-roar.mp3",
+  groan: "/audio/crowd-gasp.mp3",
+  gasp: "/audio/crowd-gasp.mp3",
+  whistle: "/audio/whistle.mp3",
 } as const;
 
 /**
