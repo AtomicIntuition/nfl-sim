@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Database Seed Script
+// GridBlitz - Database Seed Script
 // ============================================================
 // Seeds: 32 teams, ~832 players, Season 1, 18-week schedule,
 // standings for all 32 teams.
@@ -34,7 +34,7 @@ const db = drizzle(client, { schema });
 // ============================================================
 
 async function seed() {
-  console.log('🏈 GridIron Live - Database Seeder');
+  console.log('🏈 GridBlitz - Database Seeder');
   console.log('==================================\n');
 
   // ----------------------------------------------------------
@@ -209,7 +209,7 @@ async function seed() {
   console.log(`   Games:    ${totalGames}`);
   console.log(`   Weeks:    ${weeklySchedule.length}`);
   console.log(`   Standings: 32`);
-  console.log('\nYour GridIron Live database is ready! 🏈\n');
+  console.log('\nYour GridBlitz database is ready! 🏈\n');
 }
 
 // ============================================================

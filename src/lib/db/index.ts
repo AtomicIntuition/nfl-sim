@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Database Connection (Supabase + Drizzle)
+// GridBlitz - Database Connection (Supabase + Drizzle)
 // ============================================================
 
 import postgres from 'postgres';

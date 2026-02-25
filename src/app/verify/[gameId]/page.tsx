@@ -8,7 +8,7 @@ interface VerifyPageProps {
 
 export const metadata: Metadata = {
   title: "Verify Game Fairness",
-  description: "Verify that a GridIron Live game was provably fair using cryptographic proof.",
+  description: "Verify that a GridBlitz game was provably fair using cryptographic proof.",
 };
 
 export default async function VerifyPage({ params }: VerifyPageProps) {
@@ -26,7 +26,7 @@ export default async function VerifyPage({ params }: VerifyPageProps) {
             href="/"
             className="text-sm text-text-muted hover:text-text-primary transition-colors"
           >
-            &larr; Back to GridIron Live
+            &larr; Back to GridBlitz
           </Link>
           <h1 className="text-2xl font-bold text-text-primary mt-4">
             Game Verification

@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Offensive Formation System
+// GridBlitz - Offensive Formation System
 // ============================================================================
 // Selects offensive formations based on game situation, down/distance,
 // field position, and team playStyle. Each formation carries modifiers

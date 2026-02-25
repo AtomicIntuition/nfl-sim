@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Week Manager
+// GridBlitz - Week Manager
 // ============================================================
 // Handles advancing between weeks, including regular season
 // week advances and playoff round transitions.

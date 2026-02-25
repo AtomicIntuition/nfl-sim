@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Season Schedule Generator
+// GridBlitz - Season Schedule Generator
 // ============================================================
 // Generates a realistic 18-week NFL regular season schedule
 // for 32 teams across 8 divisions (4 per conference).

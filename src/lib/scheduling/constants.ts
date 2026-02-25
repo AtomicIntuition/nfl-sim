@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Scheduling Constants (Single Source of Truth)
+// GridBlitz - Scheduling Constants (Single Source of Truth)
 // ============================================================================
 // All timing-related constants for intermissions, breaks, and offseasons.
 // Import these wherever timing decisions are made to avoid drift.

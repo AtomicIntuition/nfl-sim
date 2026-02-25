@@ -265,7 +265,7 @@ export default async function HomePage() {
           <div className="text-center max-w-lg">
             <div className="text-7xl mb-6">🏈</div>
             <h1 className="text-4xl sm:text-5xl font-black text-text-primary mb-3 tracking-tight">
-              GridIron <span className="text-gold">Live</span>
+              Grid<span className="text-gold">Blitz</span>
             </h1>
             <p className="text-lg text-text-secondary mb-2">
               The always-on NFL simulation.

@@ -58,7 +58,7 @@ export function VerificationPanel({
         </h2>
         <div className="space-y-2 text-sm text-text-secondary">
           <p>
-            Every game in GridIron Live is provably fair. Before a game begins,
+            Every game in GridBlitz is provably fair. Before a game begins,
             we commit to a{" "}
             <span className="text-text-primary font-medium">server seed</span>{" "}
             by publishing its{" "}

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "GridIron Live Keep-Alive",
+  "name": "GridBlitz Keep-Alive",
   "version": "1.0.0",
-  "description": "Keeps GridIron Live simulation running 24/7 and provides admin controls.",
+  "description": "Keeps GridBlitz simulation running 24/7 and provides admin controls.",
   "permissions": ["alarms", "storage"],
   "host_permissions": [
     "http://localhost:3000/*",

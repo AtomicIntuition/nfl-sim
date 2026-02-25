@@ -1,5 +1,5 @@
 /**
- * Formatting utilities for GridIron Live
+ * Formatting utilities for GridBlitz
  * Converts raw game data into broadcast-quality display strings
  */
 

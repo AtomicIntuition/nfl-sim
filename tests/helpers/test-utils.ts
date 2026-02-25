@@ -1,5 +1,5 @@
 /**
- * GridIron Live - Shared Test Utilities
+ * GridBlitz - Shared Test Utilities
  *
  * Provides factory functions for creating test fixtures with sensible
  * defaults. All functions accept optional overrides so individual tests

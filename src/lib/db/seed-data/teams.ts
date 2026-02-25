@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - All 32 NFL Team Seed Data
+// GridBlitz - All 32 NFL Team Seed Data
 // ============================================================
 
 import type { PlayStyle, Conference, Division } from '../../simulation/types';

@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - NFL Team Logos via ESPN CDN
+// GridBlitz - NFL Team Logos via ESPN CDN
 // ============================================================
 // ESPN serves team logos at predictable CDN URLs.
 // No API key required — these are public static assets.

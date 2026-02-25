@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - AI Play Caller
+// GridBlitz - AI Play Caller
 // ============================================================================
 // The "AI coach" brain that selects what play to call based on game situation.
 // Evaluates situation in priority order: special states (kickoff, PAT),

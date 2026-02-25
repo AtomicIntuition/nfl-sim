@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Drizzle ORM Schema for Neon Postgres
+// GridBlitz - Drizzle ORM Schema for Neon Postgres
 // ============================================================
 
 import {

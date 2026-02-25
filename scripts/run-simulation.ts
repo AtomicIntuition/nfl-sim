@@ -54,7 +54,7 @@ async function tick() {
 
 console.log('');
 console.log('  ╔══════════════════════════════════════════╗');
-console.log('  ║     🏈 GridIron Live - Simulation Runner  ║');
+console.log('  ║     🏈 GridBlitz - Simulation Runner  ║');
 console.log('  ╠══════════════════════════════════════════╣');
 console.log(`  ║  API:      ${API_URL.padEnd(29)}║`);
 console.log(`  ║  Interval: ${String(INTERVAL_MS / 1000 + 's').padEnd(29)}║`);

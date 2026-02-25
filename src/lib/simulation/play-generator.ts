@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Play Resolution Engine
+// GridBlitz - Play Resolution Engine
 // ============================================================================
 // Resolves what happens on each play. Takes a PlayCall and the current game
 // situation, then simulates the outcome through probability checks, yardage

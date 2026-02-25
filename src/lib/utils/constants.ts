@@ -1,6 +1,6 @@
-/** App-wide constants for GridIron Live */
+/** App-wide constants for GridBlitz */
 
-export const APP_NAME = "GridIron Live";
+export const APP_NAME = "GridBlitz";
 export const APP_DESCRIPTION = "The always-on NFL simulation that never stops.";
 
 /** Route paths */

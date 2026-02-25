@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Featured Game Picker (DB-aware)
+// GridBlitz - Featured Game Picker (DB-aware)
 // ============================================================
 // Scores each scheduled game and returns the ID of the most
 // appealing one for live broadcast. Uses standings from the DB.

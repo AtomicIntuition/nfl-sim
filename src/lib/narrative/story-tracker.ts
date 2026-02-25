@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Story Tracker
+// GridBlitz - Story Tracker
 // ============================================================================
 // Tracks emerging narrative threads throughout a game -- storylines that
 // commentary can reference. Threads have types, descriptions, involved

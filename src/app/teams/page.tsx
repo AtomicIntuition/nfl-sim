@@ -12,8 +12,8 @@ import { formatRecord } from '@/lib/utils/formatting';
 import { ROUTES } from '@/lib/utils/constants';
 
 export const metadata: Metadata = {
-  title: 'Teams | GridIron Live',
-  description: 'All 32 NFL teams in the GridIron Live simulation.',
+  title: 'Teams | GridBlitz',
+  description: 'All 32 NFL teams in the GridBlitz simulation.',
 };
 
 export default async function TeamsPage() {

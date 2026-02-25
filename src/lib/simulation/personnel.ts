@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Offensive Personnel Grouping System
+// GridBlitz - Offensive Personnel Grouping System
 // ============================================================================
 // Selects personnel groupings (11, 12, 21, etc.) based on game situation
 // and constrains formation selection to grouping-legal formations.

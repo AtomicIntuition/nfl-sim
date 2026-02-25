@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Special Teams Engine
+// GridBlitz - Special Teams Engine
 // ============================================================================
 // Handles all kicking and special teams plays: kickoffs, punts, field goals,
 // extra points, two-point conversions, and onside kicks. Each play type

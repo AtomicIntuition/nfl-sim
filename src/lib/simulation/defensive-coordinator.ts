@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Defensive Coordinator AI
+// GridBlitz - Defensive Coordinator AI
 // ============================================================================
 // Selects defensive personnel, coverage schemes, and blitz packages based
 // on game situation. The coordinator reads the offensive formation, down

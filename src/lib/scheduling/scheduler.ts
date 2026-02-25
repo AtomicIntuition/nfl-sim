@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Scheduler (Cron-Driven State Machine)
+// GridBlitz - Scheduler (Cron-Driven State Machine)
 // ============================================================
 // The always-on scheduler that drives the simulation forward.
 // Designed to be called by a cron job every ~2 minutes.

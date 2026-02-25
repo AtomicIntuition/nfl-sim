@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - NFL Football Simulation Type System
+// GridBlitz - NFL Football Simulation Type System
 // ============================================================
 // This file is the foundational type contract for the entire
 // simulation platform. Every module depends on these types.

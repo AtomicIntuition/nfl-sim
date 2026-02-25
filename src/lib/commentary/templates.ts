@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Fallback Commentary Templates
+// GridBlitz - Fallback Commentary Templates
 // ============================================================================
 // Broadcast-quality commentary templates for when Claude API is unavailable.
 // Organized by play type x excitement level x game situation.

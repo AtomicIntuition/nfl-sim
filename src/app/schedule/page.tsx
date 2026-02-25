@@ -16,7 +16,7 @@ import type { ScheduledGame } from '@/lib/simulation/types';
 export const metadata: Metadata = {
   title: 'Schedule & Standings',
   description:
-    'Full season schedule, scores, and division standings for the current GridIron Live season.',
+    'Full season schedule, scores, and division standings for the current GridBlitz season.',
 };
 
 // ============================================================

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { LogoMark } from '@/components/brand/logo';
 
 interface HeaderProps {
   isLive?: boolean;
@@ -44,15 +45,13 @@ export function Header({ isLive = false }: HeaderProps) {
     >
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <span className="text-2xl" role="img" aria-label="football">
-            🏈
+        <Link href="/" className="flex items-center gap-2 group">
+          <LogoMark size={30} className="transition-transform group-hover:scale-105" />
+          <span className="font-black text-lg tracking-widest text-gold group-hover:text-gold-bright transition-colors">
+            GRID
           </span>
-          <span className="font-bold text-lg tracking-widest text-gold group-hover:text-gold-bright transition-colors">
-            GRIDIRON
-          </span>
-          <span className="font-bold text-lg tracking-widest text-gold-bright group-hover:text-gold transition-colors">
-            LIVE
+          <span className="font-black text-lg tracking-widest text-gold-bright group-hover:text-gold transition-colors">
+            BLITZ
           </span>
         </Link>
 

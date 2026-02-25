@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Momentum Tracker
+// GridBlitz - Momentum Tracker
 // ============================================================================
 // Tracks the intangible "feel" of who has the upper hand in a game.
 // Momentum is a continuous value from -100 (away dominates) to +100

@@ -1,14 +1,14 @@
-// GridIron Live Keep-Alive Service Worker
+// GridBlitz Keep-Alive Service Worker
 // Pings /api/simulate every 30s to keep the simulation advancing.
 
-const ALARM_NAME = 'gridiron-keepalive';
+const ALARM_NAME = 'gridblitz-keepalive';
 const ALARM_PERIOD_MINUTES = 0.5; // 30 seconds (Chrome MV3 minimum)
 
 // ── Setup alarm on install/startup ──────────────────────────
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: ALARM_PERIOD_MINUTES });
-  console.log('[GridIron] Keep-alive alarm created');
+  console.log('[GridBlitz] Keep-alive alarm created');
 });
 
 chrome.runtime.onStartup.addListener(() => {

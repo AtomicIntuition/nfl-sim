@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - NFL Penalty Engine
+// GridBlitz - NFL Penalty Engine
 // ============================================================================
 // Generates and enforces NFL penalties with realistic frequency and
 // distribution. Handles penalty selection, contextual filtering,

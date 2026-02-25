@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Playoff Manager
+// GridBlitz - Playoff Manager
 // ============================================================
 // Manages NFL playoff seeding, bracket generation, and round
 // advancement from Wild Card through the Super Bowl.

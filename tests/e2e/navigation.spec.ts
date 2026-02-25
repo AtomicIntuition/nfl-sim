@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Navigation', () => {
   test('homepage loads with correct title', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveTitle(/GridIron Live/);
+    await expect(page).toHaveTitle(/GridBlitz/);
   });
 
   test('homepage displays header on desktop', async ({ page }) => {
@@ -16,22 +16,22 @@ test.describe('Navigation', () => {
 
   test('schedule page loads', async ({ page }) => {
     await page.goto('/schedule');
-    await expect(page).toHaveTitle(/Schedule|GridIron Live/);
+    await expect(page).toHaveTitle(/Schedule|GridBlitz/);
   });
 
   test('standings page loads', async ({ page }) => {
     await page.goto('/standings');
-    await expect(page).toHaveTitle(/Standings|GridIron Live/);
+    await expect(page).toHaveTitle(/Standings|GridBlitz/);
   });
 
   test('teams page loads', async ({ page }) => {
     await page.goto('/teams');
-    await expect(page).toHaveTitle(/Teams|GridIron Live/);
+    await expect(page).toHaveTitle(/Teams|GridBlitz/);
   });
 
   test('leaderboard page loads', async ({ page }) => {
     await page.goto('/leaderboard');
-    await expect(page).toHaveTitle(/Leaderboard|GridIron Live/);
+    await expect(page).toHaveTitle(/Leaderboard|GridBlitz/);
   });
 
   test('live page loads or redirects', async ({ page }) => {

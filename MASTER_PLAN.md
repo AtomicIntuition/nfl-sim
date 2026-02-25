@@ -1,6 +1,6 @@
-# GridIron Live — Master Plan
+# GridBlitz — Master Plan
 
-> **Purpose**: Persistent roadmap tracking every task needed to bring GridIron Live from prototype to professional, monetizable product. Updated as tasks complete. Nothing gets lost across sessions.
+> **Purpose**: Persistent roadmap tracking every task needed to bring GridBlitz from prototype to professional, monetizable product. Updated as tasks complete. Nothing gets lost across sessions.
 >
 > **Overall Score (start)**: 5.6/10
 > **Target Score**: 9.5/10
@@ -616,10 +616,10 @@ Final Modifier = Personnel × Formation × Protection × Route × Motion × QBRe
 > **Priority**: LOWER (after engine + broadcast are solid)
 > **Status**: NOT STARTED
 
-### 7.1 SVG Logo/Branding
-- [ ] **Status**: PENDING
-- **Problem**: No proper app logo/favicon
-- **Fix**: Design SVG logo (football + "GL" monogram or similar). Use as favicon, OG image, header brand.
+### 7.1 SVG Logo/Branding + Rebrand
+- [x] **Status**: DONE
+- **Problem**: No proper app logo/favicon; "GridIron" name already taken
+- **Fix**: Rebranded to **GridBlitz**. Created shield+football+lightning SVG logo with "GB" monogram. Full rebrand across 80+ files: metadata, headers, footers, cookies, extension, tests, comments.
 
 ### 7.2 Landing Page Redesign
 - [x] **Status**: DONE

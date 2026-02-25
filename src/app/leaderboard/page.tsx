@@ -12,7 +12,7 @@ import type { UserScore } from '@/lib/simulation/types';
 export const metadata: Metadata = {
   title: 'Prediction Leaderboard',
   description:
-    'Top prediction leaders on GridIron Live. Track accuracy, streaks, and total points.',
+    'Top prediction leaders on GridBlitz. Track accuracy, streaks, and total points.',
 };
 
 // ============================================================
@@ -73,7 +73,7 @@ async function getLeaderboardData(userId: string | null) {
 export default async function LeaderboardPage() {
   // Read userId from cookie (set by client-side on first prediction)
   const cookieStore = await cookies();
-  const currentUserId = cookieStore.get('gridiron-user-id')?.value ?? null;
+  const currentUserId = cookieStore.get('gridblitz-user-id')?.value ?? null;
   const { users, totalUsers, currentUser } = await getLeaderboardData(currentUserId);
   const currentUserScore = currentUser;
 

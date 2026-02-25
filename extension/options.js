@@ -1,4 +1,4 @@
-// GridIron Live Extension Options
+// GridBlitz Extension Options
 
 document.addEventListener('DOMContentLoaded', async () => {
   const { siteUrl, cronSecret } = await chrome.storage.sync.get(['siteUrl', 'cronSecret']);

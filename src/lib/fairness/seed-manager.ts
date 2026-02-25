@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Provably Fair Seed Manager
+// GridBlitz - Provably Fair Seed Manager
 // ============================================================================
 // Server-side seed management for game integrity.
 // Implements the commit-reveal scheme:

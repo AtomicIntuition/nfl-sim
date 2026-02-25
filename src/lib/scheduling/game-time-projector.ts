@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Game Time Projector
+// GridBlitz - Game Time Projector
 // ============================================================
 // Projects scheduledAt for all future games in a season,
 // using actual event stream durations for precise anchoring.

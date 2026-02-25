@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - NFL Simulation Constants
+// GridBlitz - NFL Simulation Constants
 // ============================================================================
 // Single source of truth for all simulation tuning knobs.
 // All values are calibrated against real NFL statistical data.
@@ -612,7 +612,7 @@ export const ESTIMATED_GAME_SLOT_MS = 80 * 60 * 1000;
 /** Real NFL average total points per game: ~45-47 (both teams combined) */
 export const AVERAGE_TOTAL_POINTS = 46.0;
 
-/** Average number of plays (both teams) in a GridIron Live game (higher-tempo) */
+/** Average number of plays (both teams) in a GridBlitz game (higher-tempo) */
 export const AVERAGE_PLAYS_PER_GAME = 220;
 
 /** League-wide pass play percentage (~57%) */

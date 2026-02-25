@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Drama Detector
+// GridBlitz - Drama Detector
 // ============================================================================
 // Detects high-stakes dramatic moments that change commentary tone and
 // crowd energy. Each play is analyzed for situational flags (clutch,

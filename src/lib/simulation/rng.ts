@@ -1,5 +1,5 @@
 /**
- * GridIron Live - Provably Fair Seeded PRNG
+ * GridBlitz - Provably Fair Seeded PRNG
  *
  * Deterministic pseudo-random number generator backed by HMAC-SHA256.
  * Given the same server seed, client seed, and starting nonce, the

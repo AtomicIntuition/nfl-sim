@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Stats Tracker
+// GridBlitz - Stats Tracker
 // ============================================================================
 // Tracks ALL live statistics per player and per team throughout the game.
 // This is the statistical heart of the simulation -- every play flows

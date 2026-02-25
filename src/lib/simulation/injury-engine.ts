@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Injury Engine
+// GridBlitz - Injury Engine
 // ============================================================================
 // Handles in-game injury generation. Injuries add drama and realism
 // but are capped to avoid dominating the simulation.

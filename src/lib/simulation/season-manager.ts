@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Season Manager (DB-aware)
+// GridBlitz - Season Manager (DB-aware)
 // ============================================================
 // Handles season creation and completion within the simulate
 // route's state machine. Operates directly on the database.

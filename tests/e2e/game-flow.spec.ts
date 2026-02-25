@@ -5,7 +5,7 @@ test.describe('Game Flow', () => {
     await page.goto('/');
     // Should show either the season data or the "warming up" message
     const body = page.locator('body');
-    await expect(body).toContainText(/Season|GridIron|warming up|Generating/i);
+    await expect(body).toContainText(/Season|GridBlitz|warming up|Generating/i);
   });
 
   test('schedule page shows week navigation', async ({ page }) => {

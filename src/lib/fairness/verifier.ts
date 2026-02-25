@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Client-Side Fairness Verifier
+// GridBlitz - Client-Side Fairness Verifier
 // ============================================================================
 // Browser-compatible verification utilities using the Web Crypto API
 // (SubtleCrypto). These functions can run entirely in the browser without

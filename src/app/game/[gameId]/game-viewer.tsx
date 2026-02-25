@@ -76,7 +76,7 @@ export function GameViewer({ gameId, initialData }: GameViewerProps) {
             href={ROUTES.HOME}
             className="text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
           >
-            &larr; GridIron Live
+            &larr; GridBlitz
           </Link>
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-muted tracking-wider uppercase">

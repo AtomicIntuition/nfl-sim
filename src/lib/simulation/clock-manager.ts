@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - NFL Game Clock Manager
+// GridBlitz - NFL Game Clock Manager
 // ============================================================================
 // Manages NFL game clock with precise adherence to real NFL timing rules.
 // Handles quarter transitions, two-minute warning, halftime, overtime,

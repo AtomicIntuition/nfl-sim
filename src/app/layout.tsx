@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "GridIron Live — NFL Football Simulation",
-    template: "%s | GridIron Live",
+    default: "GridBlitz — NFL Football Simulation",
+    template: "%s | GridBlitz",
   },
   description:
     "The always-on NFL simulation. Watch live games, track your team through a full season, and experience every touchdown, turnover, and two-minute drill. More exciting than the real thing.",
@@ -28,19 +28,20 @@ export const metadata: Metadata = {
     "streaming",
     "sports",
     "predictions",
+    "GridBlitz",
   ],
-  authors: [{ name: "GridIron Live" }],
+  authors: [{ name: "GridBlitz" }],
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "GridIron Live",
-    title: "GridIron Live — NFL Football Simulation",
+    siteName: "GridBlitz",
+    title: "GridBlitz — NFL Football Simulation",
     description:
       "The always-on NFL simulation. Every second is action. Every game matters.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "GridIron Live",
+    title: "GridBlitz",
     description: "The always-on NFL simulation that never stops.",
   },
   robots: {

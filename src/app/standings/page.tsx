@@ -12,8 +12,8 @@ import { formatSeasonStatus } from '@/lib/utils/formatting';
 import type { DivisionStandings, TeamStanding } from '@/lib/simulation/types';
 
 export const metadata: Metadata = {
-  title: 'Standings | GridIron Live',
-  description: 'Division and conference standings for the current GridIron Live season.',
+  title: 'Standings | GridBlitz',
+  description: 'Division and conference standings for the current GridBlitz season.',
 };
 
 export default async function StandingsPage() {

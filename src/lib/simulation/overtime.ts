@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Overtime Engine
+// GridBlitz - Overtime Engine
 // ============================================================================
 // Implements the current NFL overtime rules (2024+):
 //

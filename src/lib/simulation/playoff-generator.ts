@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Playoff Game Generator
+// GridBlitz - Playoff Game Generator
 // ============================================================
 // Creates playoff bracket games dynamically from standings
 // after each playoff round is completed.

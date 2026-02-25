@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Excitement Scorer
+// GridBlitz - Excitement Scorer
 // ============================================================================
 // Rates each play's excitement level 0-100 to control commentary
 // intensity, crowd audio volume/type, and UI animation scaling.

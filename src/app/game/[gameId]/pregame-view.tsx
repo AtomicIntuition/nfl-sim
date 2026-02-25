@@ -42,24 +42,24 @@ interface StoredPrediction {
 
 function getUserId(): string {
   if (typeof window === 'undefined') return '';
-  let userId = localStorage.getItem('gridiron-user-id');
+  let userId = localStorage.getItem('gridblitz-user-id');
   if (!userId) {
     userId = crypto.randomUUID();
-    localStorage.setItem('gridiron-user-id', userId);
+    localStorage.setItem('gridblitz-user-id', userId);
   }
   // Also set as cookie so server-side pages (leaderboard) can identify user
-  document.cookie = `gridiron-user-id=${userId};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+  document.cookie = `gridblitz-user-id=${userId};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
   return userId;
 }
 
 function getDisplayName(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('gridiron-display-name');
+  return localStorage.getItem('gridblitz-display-name');
 }
 
 function setDisplayName(name: string) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('gridiron-display-name', name);
+  localStorage.setItem('gridblitz-display-name', name);
 }
 
 function getStoredPrediction(gameId: string): StoredPrediction | null {
@@ -218,7 +218,7 @@ export function PregameView({
             href={ROUTES.HOME}
             className="text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
           >
-            &larr; GridIron Live
+            &larr; GridBlitz
           </Link>
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-muted tracking-wider uppercase">
@@ -305,7 +305,7 @@ export function PregameView({
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleNameSubmit()}
-                placeholder="e.g. GridIronKing42"
+                placeholder="e.g. BlitzKing42"
                 maxLength={30}
                 autoFocus
                 className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-gold transition-colors mb-2"

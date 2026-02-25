@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Game Manager
+// GridBlitz - Game Manager
 // ============================================================
 // Handles starting a game: simulation, event storage, and
 // transition to broadcasting status.

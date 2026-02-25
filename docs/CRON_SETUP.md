@@ -1,6 +1,6 @@
 # External Cron Setup
 
-GridIron Live requires periodic calls to `POST /api/simulate` to advance the simulation. Vercel's free tier only provides 1 daily cron, so you need an external cron service for 24/7 operation.
+GridBlitz requires periodic calls to `POST /api/simulate` to advance the simulation. Vercel's free tier only provides 1 daily cron, so you need an external cron service for 24/7 operation.
 
 ## Option 1: cron-job.org (Recommended)
 

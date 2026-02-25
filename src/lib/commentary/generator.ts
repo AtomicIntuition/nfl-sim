@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Commentary Generator
+// GridBlitz - Commentary Generator
 // ============================================================================
 // Claude API integration for generating broadcast-quality commentary.
 // Falls back to deterministic templates when the API is unavailable.

@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - NFL Player Headshots via ESPN CDN
+// GridBlitz - NFL Player Headshots via ESPN CDN
 // ============================================================
 // ESPN serves player headshots at predictable CDN URLs.
 // Requires the ESPN player ID stored during roster seeding.

@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Commentary Prompt Builder
+// GridBlitz - Commentary Prompt Builder
 // ============================================================================
 // Builds rich context prompts for Claude API commentary generation.
 // Establishes two commentator personalities (Mike + Tony) and provides
@@ -100,7 +100,7 @@ function describeNarrativeThreads(narrative: NarrativeSnapshot): string {
  * and Tony (color analyst).
  */
 export function buildSystemPrompt(): string {
-  return `You are generating NFL game commentary for a football simulation called GridIron Live. You are voicing TWO broadcast commentators who work as a duo:
+  return `You are generating NFL game commentary for a football simulation called GridBlitz. You are voicing TWO broadcast commentators who work as a duo:
 
 ## MIKE (Play-by-Play)
 - Precise, energetic, paints the picture of the action

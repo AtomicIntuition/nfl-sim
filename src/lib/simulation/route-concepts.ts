@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Route Concept System
+// GridBlitz - Route Concept System
 // ============================================================================
 // Selects named route concepts based on play call depth and pre-snap
 // coverage read (MOFO vs MOFC). Applies concept-specific modifiers

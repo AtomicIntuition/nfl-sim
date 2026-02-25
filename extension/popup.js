@@ -1,4 +1,4 @@
-// GridIron Live Extension Popup
+// GridBlitz Extension Popup
 
 const ESPN_LOGO_URL = 'https://a.espncdn.com/i/teamlogos/nfl/500/';
 

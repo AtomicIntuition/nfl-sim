@@ -1,5 +1,5 @@
 // ============================================================================
-// GridIron Live - Master Simulation Engine
+// GridBlitz - Master Simulation Engine
 // ============================================================================
 // The heart of the entire platform. Orchestrates a complete NFL game from
 // coin toss through final whistle by coordinating every subsystem: play

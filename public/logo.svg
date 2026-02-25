@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="gold-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd700"/>
+      <stop offset="50%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#b8960c"/>
+    </linearGradient>
+    <linearGradient id="field-grad" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#1a2332"/>
+      <stop offset="100%" stop-color="#0a0e1a"/>
+    </linearGradient>
+    <linearGradient id="ball-grad" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#a0522d"/>
+      <stop offset="50%" stop-color="#8B4513"/>
+      <stop offset="100%" stop-color="#6b3410"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="text-glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Shield -->
+  <path
+    d="M256 28 L440 100 C452 105 460 118 460 132 L460 280 C460 340 430 396 382 432 L272 504 C262 512 250 512 240 504 L130 432 C82 396 52 340 52 280 L52 132 C52 118 60 105 72 100 Z"
+    fill="url(#field-grad)"
+    stroke="url(#gold-grad)"
+    stroke-width="6"
+  />
+
+  <!-- Inner shield accent -->
+  <path
+    d="M256 52 L424 118 C432 121 438 130 438 140 L438 278 C438 330 412 380 370 412 L268 478 C262 483 250 483 244 478 L142 412 C100 380 74 330 74 278 L74 140 C74 130 80 121 88 118 Z"
+    fill="none"
+    stroke="#d4af3718"
+    stroke-width="1.5"
+  />
+
+  <!-- Diagonal grid lines (gridiron reference) -->
+  <g opacity="0.06" clip-path="url(#shield-clip)">
+    <clipPath id="shield-clip">
+      <path d="M256 52 L424 118 C432 121 438 130 438 140 L438 278 C438 330 412 380 370 412 L268 478 C262 483 250 483 244 478 L142 412 C100 380 74 330 74 278 L74 140 C74 130 80 121 88 118 Z"/>
+    </clipPath>
+    <line x1="74" y1="200" x2="438" y2="200" stroke="#d4af37" stroke-width="1"/>
+    <line x1="74" y1="260" x2="438" y2="260" stroke="#d4af37" stroke-width="1"/>
+    <line x1="74" y1="320" x2="438" y2="320" stroke="#d4af37" stroke-width="1"/>
+    <line x1="200" y1="52" x2="200" y2="478" stroke="#d4af37" stroke-width="1"/>
+    <line x1="312" y1="52" x2="312" y2="478" stroke="#d4af37" stroke-width="1"/>
+  </g>
+
+  <!-- Football -->
+  <ellipse
+    cx="256" cy="215"
+    rx="115" ry="68"
+    fill="url(#ball-grad)"
+    transform="rotate(-30 256 215)"
+  />
+
+  <!-- Football highlight -->
+  <ellipse
+    cx="230" cy="196"
+    rx="48" ry="16"
+    fill="white"
+    opacity="0.07"
+    transform="rotate(-30 230 196)"
+  />
+
+  <!-- Football laces -->
+  <g transform="rotate(-30 256 215)" filter="url(#glow)">
+    <line x1="200" y1="215" x2="312" y2="215" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <line x1="228" y1="203" x2="228" y2="227" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="248" y1="201" x2="248" y2="229" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="268" y1="201" x2="268" y2="229" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="288" y1="203" x2="288" y2="227" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Lightning bolt (blitz!) cutting through -->
+  <path
+    d="M340 120 L310 195 L345 195 L295 295 L330 210 L300 210 L340 120Z"
+    fill="url(#gold-grad)"
+    opacity="0.85"
+    filter="url(#glow)"
+  />
+
+  <!-- Broadcast waves (top-right) -->
+  <g transform="translate(370, 140)" opacity="0.7">
+    <path d="M0 16 A16 16 0 0 1 0 -16" fill="none" stroke="#d4af37" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+    <path d="M8 26 A28 28 0 0 1 8 -26" fill="none" stroke="#d4af37" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+    <path d="M16 36 A40 40 0 0 1 16 -36" fill="none" stroke="#ffd700" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  </g>
+
+  <!-- Live dot -->
+  <circle cx="378" cy="140" r="5" fill="#ef4444">
+    <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- GB monogram -->
+  <text
+    x="256" y="405"
+    text-anchor="middle"
+    font-family="system-ui, -apple-system, sans-serif"
+    font-weight="900"
+    font-size="72"
+    letter-spacing="10"
+    fill="url(#gold-grad)"
+    filter="url(#text-glow)"
+  >GB</text>
+
+  <!-- GRIDBLITZ wordmark -->
+  <text
+    x="256" y="445"
+    text-anchor="middle"
+    font-family="system-ui, -apple-system, sans-serif"
+    font-weight="700"
+    font-size="22"
+    letter-spacing="8"
+    fill="#d4af37"
+    opacity="0.7"
+  >GRIDBLITZ</text>
+</svg>

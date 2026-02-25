@@ -57,26 +57,26 @@ export async function generateMetadata({
 
   if (isLive) {
     title = `LIVE: ${awayName} @ ${homeName}`;
-    description = `Watch ${awayTeam?.name ?? 'Away'} at ${homeTeam?.name ?? 'Home'} live on GridIron Live. Real-time play-by-play simulation.`;
+    description = `Watch ${awayTeam?.name ?? 'Away'} at ${homeTeam?.name ?? 'Home'} live on GridBlitz. Real-time play-by-play simulation.`;
   } else if (isCompleted) {
     title = `${awayName} ${game.awayScore ?? 0}, ${homeName} ${game.homeScore ?? 0} - Final`;
-    description = `Final score: ${awayTeam?.name ?? 'Away'} ${game.awayScore ?? 0}, ${homeTeam?.name ?? 'Home'} ${game.homeScore ?? 0}. Replay the full game on GridIron Live.`;
+    description = `Final score: ${awayTeam?.name ?? 'Away'} ${game.awayScore ?? 0}, ${homeTeam?.name ?? 'Home'} ${game.homeScore ?? 0}. Replay the full game on GridBlitz.`;
   } else {
     title = `${awayName} @ ${homeName} - Preview`;
-    description = `${awayTeam?.name ?? 'Away'} vs ${homeTeam?.name ?? 'Home'} coming up on GridIron Live. Make your predictions now.`;
+    description = `${awayTeam?.name ?? 'Away'} vs ${homeTeam?.name ?? 'Home'} coming up on GridBlitz. Make your predictions now.`;
   }
 
   return {
     title,
     description,
     openGraph: {
-      title: `${title} | GridIron Live`,
+      title: `${title} | GridBlitz`,
       description,
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${title} | GridIron Live`,
+      title: `${title} | GridBlitz`,
       description,
     },
   };

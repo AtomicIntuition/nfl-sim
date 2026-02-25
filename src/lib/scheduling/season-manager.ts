@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Season Manager
+// GridBlitz - Season Manager
 // ============================================================
 // Manages the season lifecycle state machine that drives the
 // entire platform from pre-season through the Super Bowl and

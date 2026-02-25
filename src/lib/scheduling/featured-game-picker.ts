@@ -1,5 +1,5 @@
 // ============================================================
-// GridIron Live - Featured Game Picker
+// GridBlitz - Featured Game Picker
 // ============================================================
 // Selects the most compelling game to broadcast live each week
 // based on team records, rivalries, playoff implications, and

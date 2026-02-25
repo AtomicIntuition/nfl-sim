@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
     return {
       title: `${team.city} ${team.mascot}`,
-      description: `Team profile, roster, and season stats for the ${team.city} ${team.mascot} on GridIron Live.`,
+      description: `Team profile, roster, and season stats for the ${team.city} ${team.mascot} on GridBlitz.`,
     };
   } catch {
     return { title: 'Team Not Found' };
